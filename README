@@ -1,0 +1,48 @@
+Jianyu Huang(UT EID:jh57266)
+email:jianyu@cs.utexas.edu
+
+run the testcase:
+$make
+$./vsh.sh test
+$./see.sh test-opt
+
+Hi Arthur,
+
+For this assignment, I thought it is not appropriate to use PatternMatch class (In my undergrad, my profess didn't allow us to use regular expressions for compiler). But later in the office hour I got to know that instead PatternMatch is recommended to use here. So I try to re-implement the second part of this assignment in the extended two days. Sorry for a mess code here.
+
+
+My code now can handle with some extreme cases.
+int compute1(int x) {
+	int res;
+	res = 3 * (x + 3) - 3 * x;
+	return res;
+}
+
+int compute2 (int a, int b) {
+	int res;
+	res = 2 + 2 * a + 3 + 10 * a + 3 * b + b *(-2);
+	return res;
+}
+
+After optimization, the ll code is as the follows,
+; Function Attrs: nounwind
+define i32 @compute1(i32 %x) #0 {
+entry:
+  ret i32 9
+}
+
+; Function Attrs: nounwind
+define i32 @compute2(i32 %a, i32 %b) #0 {
+entry:
+  %0 = mul i32 12, %a
+  %1 = add i32 %0, 5
+  %2 = add i32 %b, %1
+  ret i32 %2
+}
+
+So the optimization effect is very obvious. I use the PatternMatch class and searching all possible optimization combination(by recursion with the largest depth 3) to get the results. If we don't care about the performance of the compiler, I can change the depth to get more optimized results.
+
+For the corner case, I think I have covered most of them. But for some extremely special corner cases, if I fail just because I leak one "if or else" statement, please consider to take few point off....I think I have spent most of time to implement the above excellent optimizing features.
+
+Thanks,
+Jianyu
