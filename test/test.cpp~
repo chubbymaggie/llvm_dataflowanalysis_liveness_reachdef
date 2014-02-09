@@ -1,0 +1,12 @@
+#include <iostream>
+#include "test2.cpp"
+class B: public A<int>{
+	public:
+		B(): A<int>() {}
+};
+
+int main() {
+	A<int> x;
+	B y;
+	return 0;
+}
