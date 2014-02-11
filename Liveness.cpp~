@@ -61,9 +61,6 @@ namespace {
 				errs() << "\n";
 
 
-				DataFlow<Value *>::analysis(domain, F, false);
-
-
 			}
 
 

@@ -71,7 +71,7 @@ namespace {
 		}
 		*/
 
-		void analysis(vector<T> domain, Function& F, bool forward) {
+		void analysis(vector<T> domain, Function& F) {
 			//Gen, Kill
 			//Block in, out
 			//Instruction in, out
@@ -147,6 +147,8 @@ namespace {
 
 
 		//flowmap
+
+
 
 		virtual void initGenKill(int len, Function &F, ValueMap<T, unsigned> domainToIdx, BasicBlockInfo &*BBtoInfo) = 0;
 		virtual BitVector meetOp(std::vector<BitVector> input) = 0;
