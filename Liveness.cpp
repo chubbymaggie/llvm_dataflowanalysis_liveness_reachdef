@@ -74,34 +74,23 @@ namespace {
 					return NULL;
 				}
 				BitVector* output = new BitVector(*(inputSet[0]));
-				//if inputSet is Empty, how can we deal with this situation??
-				//	BitVector* output = new BitVector(inputSet[0]);
-				//if (!inputSet.empty()) {
-				//	output = *(inputSet[0]);
-					for (int i = 1; i < inputSet.size(); ++i) {
-						(*output) |= *(inputSet[i]);
-					}
-				//} else {
-				//	errs() << "error....inputSet is empty...." << "\n";
-				//}
+				for (int i = 1; i < inputSet.size(); ++i) {
+					(*output) |= *(inputSet[i]);
+				}
 				return output;
 			}
 
 			virtual BitVector* transferFunc(BitVector *input, BitVector *gen, BitVector *kill) {
 				BitVector* output = new BitVector(*kill);
-				//BitVector output(kill);
-				//output = *kill;
-				BVprint(*output);
 				output->flip();
-				BVprint(*kill);
-				BVprint(*output);
 				(*output) &= *input;
 				(*output) |= *gen;
 				return output;
 			}
 			//virtual void initGenKill(int len, Function::iterator BB, ValueMap<T, unsigned> domainToIdx, BitVector &*GenBV, BitVector &*KillBV) {}
-			virtual void initGenKill(int len, Function &F, ValueMap<Value *, unsigned> domainToIdx, BasicBlockInfo BBtoInfo) {
+			virtual void initGenKill(int& len, Function &F, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *>  &BBtoInfo) {
 				for (Function::iterator Bi = F.begin(), Be= F.end(); Bi != Be; ++Bi) {
+					BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
 					for (BasicBlock::iterator ii =  Bi->begin(), ie = Bi->end(); ii != ie; ++ii) {
 						//if(!isa<PHINode>(ii)){}
 						User::op_iterator OI, OE;
@@ -114,25 +103,32 @@ namespace {
 								int valIdx = domainToIdx[val];
 
 								//Assume that v = v op x will never exist in SSA form
-								BitVector tmp = *(BBtoInfo[&*Bi]->kill);
+								//BasicBlock *BB = &*Bi;
+								BitVector tmp = *(BBinf->kill);
 								if (!((tmp)[valIdx])) {
-									(BBtoInfo[&*Bi]->gen)->set(valIdx);
+									(BBinf->gen)->set(valIdx);
 								}
 							}
 
 						}
 						ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
-						if (iter != domainIdx.end()) {
+						if (iter != domainToIdx.end()) {
 							Value *val = ii;
 							//.........How to handle....................................int valIdx = domainToIdx[dyn_cast<instruction>(val)].................
 							int valIdx = domainToIdx[val];
-							BitVector tmp = *(BBtoInfo[&*Bi]->gen);
+							BitVector tmp = *(BBinf->gen);
 							if (!((tmp)[valIdx])) {
-								(BBtoInfo[&*Bi]->kill)->set(valIdx);
+								(BBinf->kill)->set(valIdx);
 							}
 
 						}
 					}
+					errs() << "BB name:" << Bi->getName() << "\n";
+					errs() << "gen:";
+					BVprint(BBinf->gen);
+					errs() << "kill:";
+					BVprint(BBinf->kill);
+
 				}
 			}
 

@@ -24,10 +24,10 @@
 #include <fstream>
 #include <iostream>
 
-using namespace llvm;
+//using namespace llvm;
 
-namespace {
-//namespace llvm {}
+//namespace {
+namespace llvm {
 
 	class BasicBlockInfo {
 		public:
@@ -84,7 +84,7 @@ namespace {
 			//...........generate the BBtoInfo............
 			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
 				//init the BBtoInfo
-				BBtoInfo[&*Bi] = new BasicBlockInfo(domain.size());
+				BBtoInfo[&*Bi] = new BasicBlockInfo(&*Bi, domain.size());
 			}
 
 			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
@@ -101,7 +101,9 @@ namespace {
 			//init the gen and kill set
 			//GenSet;
 			//KillSet;
-			initGenKill(domain.size(), F, domainToIdx, BBtoInfo);
+			int len = domain.size();
+			initGenKill(len, F, domainToIdx, BBtoInfo);
+
 			//for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {}
 
 
@@ -109,6 +111,7 @@ namespace {
 			bool isChanged = true;
 			while (isChanged) {
 				isChanged = false;
+				errs() << "new round:" << "\n";
 				for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
 					// for liveness: out[B] = U(in[B], mask[B][Succ]
 					//first, we don't consider the mask...
@@ -120,31 +123,42 @@ namespace {
 						meetInput.push_back(BBtoInfo[BB]->in);
 					}
 					//delete BBtoInfo[&*Bi]->out???;
-					BBtoInfo[&*Bi]->out = meetOp(meetInput);
+					if (!meetInput.empty()) {
+						BBtoInfo[&*Bi]->out = meetOp(meetInput);
+					}
 
 
 					BitVector *oldOut = BBtoInfo[&*Bi]->in;
 
+
 					//delete BBtoInfo[&*Bi]->in???;
 					BBtoInfo[&*Bi]->in = transferFunc(BBtoInfo[&*Bi]->out, BBtoInfo[&*Bi]->gen, BBtoInfo[&*Bi]->kill); 
 
-					BVprint(*oldOut);
-					BVprint(*(BBtoInfo[&*Bi]->in));
+					//errs() << "oldin2:";
+					//BVprint(oldOut);
+					//errs() << "newin:";
+					//BVprint(BBtoInfo[&*Bi]->in);
 
-					if (isChanged && *oldOut != *(BBtoInfo[&*Bi]->in)) {
+					if (!isChanged && *oldOut != *(BBtoInfo[&*Bi]->in)) {
+						errs() << "isChanged!" << "\n";
 						isChanged = true;
 					}
+
+					errs() << "BB name:" << Bi->getName() << "\n";
+					errs() << "in:";
+					BVprint(BBtoInfo[&*Bi]->in);
+					errs() << "out:";
+					BVprint(BBtoInfo[&*Bi]->out);
 
 				}
 			}
 		}
 
 		//print the Bitvector
-		void BVprint(BitVector BV) {
-			for (int i = 0; i < BV.size(); ++i) {
-				errs() << (BV[i]?"1":"0");
+		void BVprint(BitVector* BV) {
+			for (int i = 0; i < (*BV).size(); ++i) {
+				errs() << (((*BV)[i])?"1":"0");
 			}
-
 			errs() << "\n";
 
 		}
@@ -154,7 +168,7 @@ namespace {
 
 		//flowmap
 
-		virtual void initGenKill(int len, Function &F, ValueMap<T, unsigned> domainToIdx, BasicBlockInfo *BBtoInfo) = 0;
+		virtual void initGenKill(int& len, Function &F, ValueMap<T, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *>  &BBtoInfo) = 0;
 		virtual BitVector* meetOp(std::vector<BitVector *> input) = 0;
 
 		virtual BitVector* transferFunc(BitVector *input, BitVector *gen, BitVector *kill) = 0;
@@ -163,8 +177,8 @@ namespace {
 		virtual BitVector* getBoundaryCondition(int len) = 0;
 		virtual BitVector* initFlowValues(int len) = 0;
 
-		virtual void initGen() = 0;
-		virtual void initKill() = 0;
+//		virtual void initGen() = 0;
+//		virtual void initKill() = 0;
 
 	};
 }
