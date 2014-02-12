@@ -16,6 +16,7 @@
 
 #include "llvm/ADT/ValueMap.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/Support/CFG.h"
 
 
 
@@ -50,28 +51,20 @@ namespace {
 			//ValueMap<T, unsigned> DomainMap...
 			//ValueMap<BasicBlock *, BasicBlockInfo> BBMap...
 
+/*
 
 		T a;
-		DataFlow() {
-		}
-		/*
-		public:
-			ValueMap<BasicBlock*, BitVector*> *in;
-			ValueMap<BasicBlock*, BitVector*> *out;
-		DataFlow() {
-			in = new ValueMap<BasicBlock*, BitVector*>();
-			out = new ValueMap<BasicBlock*, BitVector*>();
-		}
 		*/
-
-
+		DataFlow() {
+		}
+	
 		/*
 		DataFlow(std::vector<T> domain, bool forward) {
 
 		}
 		*/
 
-		void analysis(vector<T> domain, Function& F) {
+		void analysis(std::vector<T> domain, Function& F, bool forward) {
 			//Gen, Kill
 			//Block in, out
 			//Instruction in, out
@@ -99,7 +92,7 @@ namespace {
 				BBtoInfo[&*Bi]->in = initFlowValues(domain.size());
 			}
 
-			BBtoInfo[F.back()]->in = getBoundaryCondition(domain.size());
+			BBtoInfo[&(F.back())]->in = getBoundaryCondition(domain.size());
 
 			//init the flow map
 			//
@@ -108,7 +101,7 @@ namespace {
 			//init the gen and kill set
 			//GenSet;
 			//KillSet;
-			initGenKill(len, F, domainToIdx, BBtoInfo);
+			initGenKill(domain.size(), F, domainToIdx, BBtoInfo);
 			//for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {}
 
 
@@ -122,11 +115,12 @@ namespace {
 					//we don't consider out and in combination yet....
 					//ValueMap<
 					std::vector<BitVector *> meetInput;
-					for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); SuccIt != SuccE; ++SuccIt) {
-						meetInput.push_back(BBtoInfo[&*Bi]->in);
+					for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+						BasicBlock *BB = *succIt;
+						meetInput.push_back(BBtoInfo[BB]->in);
 					}
 					//delete BBtoInfo[&*Bi]->out???;
-					BBtoInfo[&*Bi]->out = MeetOp(meetInput);
+					BBtoInfo[&*Bi]->out = meetOp(meetInput);
 
 
 					BitVector oldOut = BBtoInfo[&*Bi]->in;
@@ -134,10 +128,10 @@ namespace {
 					//delete BBtoInfo[&*Bi]->in???;
 					BBtoInfo[&*Bi]->in = transferFunc(BBtoInfo[&*Bi]->out, BBtoInfo[&*Bi]->gen, BBtoInfo[&*Bi]->kill); 
 
-					BVprint(oldOut);
-					BVprint(BBtoInfo[&*Bi]->in);
+					BVprint(*oldOut);
+					BVprint(*(BBtoInfo[&*Bi]->in));
 
-					if (isChanged && oldOut != BBtoInfo[&*Bi]->in) {
+					if (isChanged && *oldOut != *(BBtoInfo[&*Bi]->in)) {
 						isChanged = true;
 					}
 
@@ -145,19 +139,29 @@ namespace {
 			}
 		}
 
+		//print the Bitvector
+		void BVprint(BitVector BV) {
+			for (int i = 0; i < BV.size(); ++i) {
+				errs() << (BV[i]?"1":"0");
+			}
+
+			errs() << "\n";
+
+		}
+
+
+
 
 		//flowmap
 
+		virtual void initGenKill(int len, Function &F, ValueMap<T, unsigned> domainToIdx, BasicBlockInfo *BBtoInfo) = 0;
+		virtual BitVector* meetOp(std::vector<BitVector *> input) = 0;
 
-
-		virtual void initGenKill(int len, Function &F, ValueMap<T, unsigned> domainToIdx, BasicBlockInfo &*BBtoInfo) = 0;
-		virtual BitVector meetOp(std::vector<BitVector> input) = 0;
-
-		virtual BitVector transferFunc(BitVector input, BitVector gen, BitVector kill) = 0;
+		virtual BitVector* transferFunc(BitVector *input, BitVector *gen, BitVector *kill) = 0;
 
 		//Notice: BoundatryCondition for the Reaching Def may vary...argu -> true; instruction -> false....initially
-		virtual BitVector getBoundaryCondition(int len) = 0;
-		virtual BitVector initFlowValues(int len) = 0;
+		virtual BitVector* getBoundaryCondition(int len) = 0;
+		virtual BitVector* initFlowValues(int len) = 0;
 
 		virtual void initGen() = 0;
 		virtual void initKill() = 0;

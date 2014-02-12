@@ -68,49 +68,44 @@ namespace {
 
 
 			//this function may need to be changed, since the phi should be handled in meetOp....
-			virtual BitVector meetOp(std::vector<BitVector> inputSet) {
-				BitVector output;
-
+			virtual BitVector* meetOp(std::vector<BitVector *> inputSet) {
+				if (inputSet.empty()) {
+					errs() << "error....inputSet is empty...." << "\n";
+					return NULL;
+				}
+				BitVector* output = new BitVector(*(inputSet[0]));
 				//if inputSet is Empty, how can we deal with this situation??
-				if (!inputSet.empty()) {
-					output = inputSet[0];
+				//	BitVector* output = new BitVector(inputSet[0]);
+				//if (!inputSet.empty()) {
+				//	output = *(inputSet[0]);
 					for (int i = 1; i < inputSet.size(); ++i) {
-						output = output | inputSet[i];
+						(*output) |= *(inputSet[i]);
 					}
-				}
+				//} else {
+				//	errs() << "error....inputSet is empty...." << "\n";
+				//}
 				return output;
 			}
 
-			virtual BitVector transferFunc(BitVector *input, BitVector *gen, BitVector *kill) {
-				BitVector output;
+			virtual BitVector* transferFunc(BitVector *input, BitVector *gen, BitVector *kill) {
+				BitVector* output = new BitVector(*kill);
 				//BitVector output(kill);
-				output = kill;
-				BVprint(output);
-				output.flip();
-				BVprint(kill);
-				BVprint(output);
-				output &= input;
-				output |= gen;
+				//output = *kill;
+				BVprint(*output);
+				output->flip();
+				BVprint(*kill);
+				BVprint(*output);
+				(*output) &= *input;
+				(*output) |= *gen;
 				return output;
 			}
-
-			//print the Bitvector
-			void BVprint(BitVector BV) {
-				for (int i = 0; i < BV.size(); ++i) {
-					errs() << (BV[i]?"1":"0");
-				}
-
-				errs() << "\n";
-
-			}
-
 			//virtual void initGenKill(int len, Function::iterator BB, ValueMap<T, unsigned> domainToIdx, BitVector &*GenBV, BitVector &*KillBV) {}
-			virtual void initGenKill(int len, Function &F, ValueMap<Value *, unsigned> domainToIdx, BasicBlockInfo &*BBtoInfo) {
+			virtual void initGenKill(int len, Function &F, ValueMap<Value *, unsigned> domainToIdx, BasicBlockInfo BBtoInfo) {
 				for (Function::iterator Bi = F.begin(), Be= F.end(); Bi != Be; ++Bi) {
-					for (BasicBlock::iterator ii =  BB->begin(), ie = BB->end(); ii != ie; ++ii) {
+					for (BasicBlock::iterator ii =  Bi->begin(), ie = Bi->end(); ii != ie; ++ii) {
 						//if(!isa<PHINode>(ii)){}
 						User::op_iterator OI, OE;
-						for (OI = insn->op_begin(), OE = insn->op_end(); OI != OE; ++OI) {
+						for (OI = ii->op_begin(), OE = ii->op_end(); OI != OE; ++OI) {
 							Value *val = *OI;
 							if (isa<Instruction>(val) || isa<Argument>(val)) {
 								// val is used by insn
@@ -119,20 +114,21 @@ namespace {
 								int valIdx = domainToIdx[val];
 
 								//Assume that v = v op x will never exist in SSA form
-								if (!((BBtoInfo[&*Bi]->kill)[valIdx])) {
-									(BBtoInfo[&*Bi]->gen).set(valIdx);
+								BitVector tmp = *(BBtoInfo[&*Bi]->kill);
+								if (!((tmp)[valIdx])) {
+									(BBtoInfo[&*Bi]->gen)->set(valIdx);
 								}
 							}
 
 						}
-						ValueMap<Value*, unsigned>::const_iterator iter = domainIdx.find(dyn_cast<instruction>(ii));
+						ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
 						if (iter != domainIdx.end()) {
-
 							Value *val = ii;
 							//.........How to handle....................................int valIdx = domainToIdx[dyn_cast<instruction>(val)].................
 							int valIdx = domainToIdx[val];
-							if (!((BBtoInfo[&*Bi]->gen)[valIdx])) {
-								(BBtoInfo[&*Bi]->kill).set(valIdx);
+							BitVector tmp = *(BBtoInfo[&*Bi]->gen);
+							if (!((tmp)[valIdx])) {
+								(BBtoInfo[&*Bi]->kill)->set(valIdx);
 							}
 
 						}
@@ -140,15 +136,13 @@ namespace {
 				}
 			}
 
-			virtual void initKill() {
-			}
 
-			virtual BitVector getBoundaryCondition(int len) {
+			virtual BitVector* getBoundaryCondition(int len) {
 				return new BitVector(len, false);
 			}
 
 
-			virtual BitVector initFlowValues(int len) {
+			virtual BitVector* initFlowValues(int len) {
 				return new BitVector(len, false);
 			}
 
