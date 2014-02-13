@@ -79,6 +79,7 @@ namespace {
 				return output;
 			}
 
+
 			virtual BitVector* transferFunc(BitVector *input, BitVector *gen, BitVector *kill) {
 				BitVector* output = new BitVector(*kill);
 				output->flip();
