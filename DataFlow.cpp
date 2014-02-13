@@ -24,11 +24,10 @@
 #include <fstream>
 #include <iostream>
 
-//using namespace llvm;
+using namespace llvm;
 
-//namespace {
-namespace llvm {
-
+namespace {
+//namespace llvm {}
 	class BasicBlockInfo {
 		public:
 			BitVector *gen;
@@ -64,7 +63,7 @@ namespace llvm {
 		}
 		*/
 
-		void analysis(std::vector<T> domain, Function& F, bool forward) {
+		void analysis(std::vector<T> domain, Function& F, bool isForward) {
 			//Gen, Kill
 			//Block in, out
 			//Instruction in, out
@@ -113,6 +112,11 @@ namespace llvm {
 				isChanged = false;
 				errs() << "new round:" << "\n";
 				for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+
+					BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
+					BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+					BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+
 					// for liveness: out[B] = U(in[B], mask[B][Succ]
 					//first, we don't consider the mask...
 					//we don't consider out and in combination yet....
@@ -124,15 +128,16 @@ namespace llvm {
 					}
 					//delete BBtoInfo[&*Bi]->out???;
 					if (!meetInput.empty()) {
-						BBtoInfo[&*Bi]->out = meetOp(meetInput);
+						//BBtoInfo[&*Bi]->out = meetOp(meetInput);
+						bin = meetOp(meetInput);
 					}
 
-
-					BitVector *oldOut = BBtoInfo[&*Bi]->in;
-
+					//BitVector *oldOut = BBtoInfo[&*Bi]->in;
+					BitVector *oldOut = (isForward) ? BBinf->out : BBinf->in;
 
 					//delete BBtoInfo[&*Bi]->in???;
-					BBtoInfo[&*Bi]->in = transferFunc(BBtoInfo[&*Bi]->out, BBtoInfo[&*Bi]->gen, BBtoInfo[&*Bi]->kill); 
+					//BBtoInfo[&*Bi]->in = transferFunc(BBtoInfo[&*Bi]->out, BBtoInfo[&*Bi]->gen, BBtoInfo[&*Bi]->kill); 
+					bout = transferFunc(bin, BBinf->gen, BBinf->kill); 
 
 					//errs() << "oldin2:";
 					//BVprint(oldOut);
@@ -164,9 +169,8 @@ namespace llvm {
 		}
 
 
-
-
 		//flowmap
+
 
 		virtual void initGenKill(int& len, Function &F, ValueMap<T, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *>  &BBtoInfo) = 0;
 		virtual BitVector* meetOp(std::vector<BitVector *> input) = 0;
@@ -176,9 +180,5 @@ namespace llvm {
 		//Notice: BoundatryCondition for the Reaching Def may vary...argu -> true; instruction -> false....initially
 		virtual BitVector* getBoundaryCondition(int len) = 0;
 		virtual BitVector* initFlowValues(int len) = 0;
-
-//		virtual void initGen() = 0;
-//		virtual void initKill() = 0;
-
 	};
 }

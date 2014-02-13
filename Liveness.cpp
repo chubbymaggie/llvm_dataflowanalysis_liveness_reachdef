@@ -51,7 +51,6 @@ namespace {
 						domain.push_back(&*ii);
 					}
 				}
-
 				//debugging.....
 				errs() << "Domain: ";
 				for (int i = 0; i < domain.size(); ++i) {
@@ -120,7 +119,6 @@ namespace {
 							if (!((tmp)[valIdx])) {
 								(BBinf->kill)->set(valIdx);
 							}
-
 						}
 					}
 					errs() << "BB name:" << Bi->getName() << "\n";
@@ -128,7 +126,6 @@ namespace {
 					BVprint(BBinf->gen);
 					errs() << "kill:";
 					BVprint(BBinf->kill);
-
 				}
 			}
 
@@ -141,7 +138,6 @@ namespace {
 			virtual BitVector* initFlowValues(int len) {
 				return new BitVector(len, false);
 			}
-
 
 			// We don't modify the program, so we preserve all analyses
 			virtual void getAnalysisUsage(AnalysisUsage &AU) const {
