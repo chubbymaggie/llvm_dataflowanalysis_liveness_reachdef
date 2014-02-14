@@ -140,13 +140,48 @@ namespace {
 						BasicBlock *Si = *succIt;
 						BasicBlockInfo *Sinf = BBtoInfo[Si];
 						initGenKill(Si, Bi, domainToIdx, BBtoInfo);
+
+						errs() << "Gen && Kill Set\n";
+						errs() << Bi->getName() << "->" << Si->getName() << "\n";
+						errs() << "gen:";
+						BVprint(BBtoInfo[&*Si]->gen);
+						errs() << "S-kill:";
+						BVprint(BBtoInfo[&*Si]->kill);
+						errs() << "-------------------------------------------------------\n";
+						
+						//Sinf->in is always a new value, pointer redirect...so we don't need to reset Sinf->in
+						//delete Sinf->in;
 						Sinf->in = transferFunc(Sinf->out, Sinf->gen, Sinf->kill);
+						errs() << "S-in:";
+						BVprint(BBtoInfo[&*Si]->in);
+						errs() << "-------------------------------------------------------\n";
+	
 						if (succIt == succ_begin(Bi)) {
-							BBinf->out = Sinf->in;
+							*(BBinf->out) = *(Sinf->in);
 						} else {
 							meetOp(BBinf->out, Sinf->in);	
 						}
+						/*
+						errs() << "-------------------------------------------------------\n";
+						errs() << Bi->getName() << "->" << Si->getName() << "\n";
+						errs() << "in:";
+						BVprint(BBtoInfo[&*Bi]->in);
+						errs() << "out:";
+						BVprint(BBtoInfo[&*Bi]->out);
+						errs() << "-------------------------------------------------------\n";
+						*/
+
 					}
+
+					errs() << "new worklist elem\n";
+					errs() << "-------------------------------------------------------\n";
+					errs() << "BB name:" << Bi->getName() << "\n";
+					errs() << "Oldout:";
+					BVprint(oldOut);
+					errs() << "out:";
+					BVprint(BBtoInfo[&*Bi]->out);
+					errs() << "********************************************************\n";
+			
 					if (*oldOut != *(BBinf->out)) {
 						errs() << "isChanged!" << "\n";
 						for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
@@ -157,12 +192,15 @@ namespace {
 						}
 					}
 
+
 				}
+				/*
 				errs() << "BB name:" << Bi->getName() << "\n";
 				errs() << "in:";
 				BVprint(BBtoInfo[&*Bi]->in);
 				errs() << "out:";
 				BVprint(BBtoInfo[&*Bi]->out);
+				*/
 			}
 
 			errs() << "output:............\n";

@@ -78,16 +78,24 @@ namespace {
 				return output;
 			}
 			virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *> &BBtoInfo) {
+				BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
+				(BBinf->gen)->reset(0, domainToIdx.size());
+				(BBinf->kill)->reset(0, domainToIdx.size());	
 				for (BasicBlock::iterator ii = Bi->begin(), ie = Bi->end(); ii != ie; ++ii) {
-					BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
 					if(isa<PHINode>(ii)){
 						PHINode *pN = dyn_cast<PHINode>(&*ii);
 						unsigned idx = pN->getBasicBlockIndex(Pi);
+
 						if (idx >= 0 && idx < pN->getNumIncomingValues()) {
 							Value *val = pN->getIncomingValue(idx);
-							unsigned valIdx = domainToIdx[val];
-							if (!((*(BBinf->kill))[valIdx])) {
-								(BBinf->gen)->set(valIdx);
+
+							if (isa<Instruction>(val) || isa<Argument>(val)) {
+								unsigned valIdx = domainToIdx[val];
+								if (!((*(BBinf->kill))[valIdx])) {
+									errs() << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
+									errs() << "idx:" << idx << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
+									(BBinf->gen)->set(valIdx);
+								}
 							}
 						}
 						//duplicated code..............I will remove it later.............
@@ -96,6 +104,9 @@ namespace {
 							Value *val = ii;
 							int valIdx = domainToIdx[val];
 							if (!((*(BBinf->gen))[valIdx])) {
+								errs() << "2&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
+								errs() << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
+									
 								(BBinf->kill)->set(valIdx);
 							}
 						}
