@@ -91,6 +91,8 @@ namespace {
 				BBtoInfo[&*Bi]->in = initFlowValues(domain.size());
 			}
 
+
+			errs() << "shangxin" <<  F.back().getName() << "\n";
 			BBtoInfo[&(F.back())]->in = getBoundaryCondition(domain.size());
 
 			//init the flow map
@@ -124,6 +126,77 @@ namespace {
 
 
 			//first implement with the ischanged flag, then transform it into the WorkList form...Note: 1. set or list 2. bfs, guarantee to traverse all the node from bottom to top at least once.
+
+			std::vector<BasicBlock *> Worklist;
+			if (isForward) {
+				Function::iterator Bi = F.end(), Bs = F.begin();
+				while (true) {
+					-- Bi;
+					Worklist.push_back(&*Bi);
+					if (Bi == Bs) {
+						break;
+					}
+				}
+			} else {
+				for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+					Worklist.push_back(&*Bi);
+				}
+			}
+
+			while (!Worklist.empty()) {
+				BasicBlock *Bi = Worklist.back();
+				Worklist.pop_back();
+				BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
+				BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+				BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+
+				std::vector<BitVector *> meetInput;
+					for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+						BasicBlock *BB = *succIt;
+
+						std::pair<BasicBlock*, BasicBlock*> BBkey = std::make_pair(&*Bi, BB);
+						BitVector *itemin = new BitVector(*(BBtoInfo[BB]->in));
+	
+
+						if (flowFilter.find(BBkey) != flowFilter.end()) {
+							(*itemin) &= (*(flowFilter[BBkey]));
+						}
+						if (flowReserve.find(BBkey) != flowReserve.end()) {
+							(*itemin) |= (*(flowReserve[BBkey]));
+						}
+
+						meetInput.push_back(itemin);
+	
+						meetInput.push_back(itemin);
+					}
+					if (!meetInput.empty()) {
+						bin = meetOp(meetInput);
+					}
+
+					BitVector *oldOut = (isForward) ? BBinf->out : BBinf->in;
+
+					bout = transferFunc(bin, BBinf->gen, BBinf->kill); 
+
+					if (*oldOut != *(BBtoInfo[&*Bi]->in)) {
+						errs() << "isChanged!" << "\n";
+
+						for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+							//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
+								BasicBlock *BB = *succIt;
+								Worklist.push_back(BB);
+							//}
+						}
+					}
+
+					errs() << "BB name:" << Bi->getName() << "\n";
+					errs() << "in:";
+					BVprint(BBtoInfo[&*Bi]->in);
+					errs() << "out:";
+					BVprint(BBtoInfo[&*Bi]->out);
+			}
+
+
+			/*
 			bool isChanged = true;
 			while (isChanged) {
 				isChanged = false;
@@ -152,15 +225,8 @@ namespace {
 						std::pair<BasicBlock*, BasicBlock*> BBkey = std::make_pair(&*Bi, BB);
 						BitVector *itemin = new BitVector(*(BBtoInfo[BB]->in));
 						//no release memory...ugly programming style
-						/*
-						errs() << "itemin:";
-						BVprint(itemin);
-						errs() << "filter:";
-						BVprint(flowFilter[BBkey]);
-						errs() << "reserve:";
-						BVprint(flowReserve[BBkey]);
-						*/
-
+					
+						
 						if (flowFilter.find(BBkey) != flowFilter.end()) {
 							(*itemin) &= (*(flowFilter[BBkey]));
 						}
@@ -201,6 +267,11 @@ namespace {
 					BVprint(BBtoInfo[&*Bi]->out);
 				}
 			}
+			*/
+
+
+
+
 		}
 
 		//print the Bitvector
