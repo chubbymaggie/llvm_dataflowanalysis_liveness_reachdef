@@ -44,6 +44,24 @@ namespace {
 			}
 	};
 
+	class InstInfo {
+		public:
+			BitVector *gen;
+			BitVector *kill;
+			BitVector *in;
+			BitVector *out;
+			Instruction *inst;
+			InstInfo(Instruction *ii, unsigned len) {
+				this->inst = ii;
+				gen = new BitVector(len);
+				kill = new BitVector(len);
+				in = new BitVector(len);
+				out = new BitVector(len);
+			}
+	};
+
+
+
 	template<class T>
 	class DataFlow {
 		public:
@@ -141,6 +159,7 @@ namespace {
 						BasicBlockInfo *Sinf = BBtoInfo[Si];
 						initGenKill(Si, Bi, domainToIdx, BBtoInfo);
 
+						/*
 						errs() << "Gen && Kill Set\n";
 						errs() << Bi->getName() << "->" << Si->getName() << "\n";
 						errs() << "gen:";
@@ -148,13 +167,14 @@ namespace {
 						errs() << "S-kill:";
 						BVprint(BBtoInfo[&*Si]->kill);
 						errs() << "-------------------------------------------------------\n";
+						*/
 						
 						//Sinf->in is always a new value, pointer redirect...so we don't need to reset Sinf->in
 						//delete Sinf->in;
 						Sinf->in = transferFunc(Sinf->out, Sinf->gen, Sinf->kill);
-						errs() << "S-in:";
-						BVprint(BBtoInfo[&*Si]->in);
-						errs() << "-------------------------------------------------------\n";
+						//errs() << "S-in:";
+						//BVprint(BBtoInfo[&*Si]->in);
+						//errs() << "-------------------------------------------------------\n";
 	
 						if (succIt == succ_begin(Bi)) {
 							*(BBinf->out) = *(Sinf->in);
@@ -173,6 +193,7 @@ namespace {
 
 					}
 
+					/*
 					errs() << "new worklist elem\n";
 					errs() << "-------------------------------------------------------\n";
 					errs() << "BB name:" << Bi->getName() << "\n";
@@ -181,6 +202,7 @@ namespace {
 					errs() << "out:";
 					BVprint(BBtoInfo[&*Bi]->out);
 					errs() << "********************************************************\n";
+					*/
 			
 					if (*oldOut != *(BBinf->out)) {
 						errs() << "isChanged!" << "\n";
@@ -210,10 +232,44 @@ namespace {
 				BVprint(BBtoInfo[&*Bi]->out);
 			}
 
+			ValueMap<Instruction *, InstInfo *> InstToInfo;
+			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+
+				errs() << "BB name.^^^^^^^:" << Bi->getName() << "\n";
+				BasicBlock::iterator ii = Bi->end(), is = Bi->begin();
+				//InstInfo *curInstInfo;
+				while (true) {
+					--ii;
+					InstToInfo[&*ii] = new InstInfo(&*ii, domain.size());
+					//curInstInfo = new InstInfo(&*ii, domain.size());
+					initInstGenKill(&*ii, domainToIdx, InstToInfo);
+
+					if (ii == (--(Bi->end()))) {
+						//two pointer point to the same variable.....
+						//curInstInfo->out = BBtoInfo[&*Bi]->out;
+						InstToInfo[&*ii]->out = BBtoInfo[&*Bi]->out;
+					} else {
+						//curInstInfo->out = InstToInfo[&*(--ii)]->in;
+						//++ii;
+						BasicBlock::iterator ij = (++ii);
+						--ii;
+						InstToInfo[&*ii]->out = InstToInfo[&*(ij)]->in;
+						
+					}				
+					//InstToInfo[&*ii]->in = transferFunc(curInstInfo->out, curInstInfo->gen, curInstInfo->kill);	
+					InstToInfo[&*ii]->in = transferFunc(InstToInfo[&*ii]->out, InstToInfo[&*ii]->gen, InstToInfo[&*ii]->kill);	
+					//errs() << *ii << "----";
+					//BVprint(InstToInfo[&*ii]->out);
+
+					if (ii == is) {
+						break;
+					}
+				}
+				//two pointer point to the same variable.....
+				BBtoInfo[&*Bi]->in = InstToInfo[&*ii]->in;
+				BVprint(BBtoInfo[&*Bi]->in);
+			}
 		}
-
-
-
 		//print the Bitvector
 		void BVprint(BitVector* BV) {
 			for (int i = 0; i < (*BV).size(); ++i) {
@@ -267,6 +323,7 @@ namespace {
 			}
 		}
 
+		virtual void initInstGenKill(Instruction *ii, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<Instruction *, InstInfo *> &InstToInfo) = 0;
 		virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *> &BBtoInfo) = 0;
 		virtual void meetOp(BitVector *op1, BitVector *op2) = 0;
 

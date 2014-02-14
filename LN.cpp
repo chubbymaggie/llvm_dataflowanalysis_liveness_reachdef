@@ -77,6 +77,27 @@ namespace {
 				(*output) |= *gen;
 				return output;
 			}
+			
+			virtual void initInstGenKill(Instruction *ii, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<Instruction *, InstInfo *> &InstToInfo) {
+				InstInfo *instInf = InstToInfo[ii];
+				//what if  v = v + 1 case.....
+				User::op_iterator OI, OE;
+				for (OI = ii->op_begin(), OE = ii->op_end(); OI != OE; ++OI) {
+					
+					Value *val = *OI;
+					if (isa<Instruction>(val) || isa<Argument>(val)) {
+
+						int valIdx = domainToIdx[val];
+						(instInf->gen)->set(valIdx);
+					}
+				}
+				ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
+				if (iter != domainToIdx.end()) {
+					Value *val = ii;
+					int valIdx = domainToIdx[val];
+					(instInf->kill)->set(valIdx);
+				}
+			}
 			virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *> &BBtoInfo) {
 				BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
 				(BBinf->gen)->reset(0, domainToIdx.size());
@@ -92,8 +113,8 @@ namespace {
 							if (isa<Instruction>(val) || isa<Argument>(val)) {
 								unsigned valIdx = domainToIdx[val];
 								if (!((*(BBinf->kill))[valIdx])) {
-									errs() << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
-									errs() << "idx:" << idx << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
+									//errs() << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
+									//errs() << "idx:" << idx << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
 									(BBinf->gen)->set(valIdx);
 								}
 							}
@@ -104,8 +125,8 @@ namespace {
 							Value *val = ii;
 							int valIdx = domainToIdx[val];
 							if (!((*(BBinf->gen))[valIdx])) {
-								errs() << "2&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
-								errs() << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
+								//errs() << "2&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
+								//errs() << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
 									
 								(BBinf->kill)->set(valIdx);
 							}
