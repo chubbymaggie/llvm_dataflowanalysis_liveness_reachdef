@@ -109,18 +109,6 @@ namespace {
 			}
 			errs() << "flag3" << "\n";
 
-
-			//init the gen and kill set
-			//GenSet;
-			//KillSet;
-			int len = domain.size();
-			initGenKill(len, F, domainToIdx, BBtoInfo);
-
-			//for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {}
-
-
-			//first implement with the ischanged flag, then transform it into the WorkList form...Note: 1. set or list 2. bfs, guarantee to traverse all the node from bottom to top at least once.
-
 			std::vector<BasicBlock *> Worklist;
 			if (isForward) {
 				Function::iterator Bi = F.end(), Bs = F.begin();
@@ -136,7 +124,6 @@ namespace {
 					Worklist.push_back(&*Bi);
 				}
 			}
-
 			while (!Worklist.empty()) {
 				BasicBlock *Bi = Worklist.back();
 				Worklist.pop_back();
@@ -147,11 +134,10 @@ namespace {
 				if (isForward) {
 
 				} else {
-					//BitVector *oldOut = (isForward) ? BBinf->out : BBinf->in;
 					BitVector *oldOut = new BitVector(*(BBinf->out)); 
 					
 					for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
-						BasicBlock *Si = &*succIt;
+						BasicBlock *Si = *succIt;
 						BasicBlockInfo *Sinf = BBtoInfo[Si];
 						initGenKill(Si, Bi, domainToIdx, BBtoInfo);
 						Sinf->in = transferFunc(Sinf->out, Sinf->gen, Sinf->kill);
@@ -178,7 +164,17 @@ namespace {
 				errs() << "out:";
 				BVprint(BBtoInfo[&*Bi]->out);
 			}
+
+			errs() << "output:............\n";
+
+			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+				errs() << "BB name.....:" << Bi->getName() << "\n";
+				BVprint(BBtoInfo[&*Bi]->out);
+			}
+
 		}
+
+
 
 		//print the Bitvector
 		void BVprint(BitVector* BV) {

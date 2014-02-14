@@ -23,7 +23,7 @@
 #include "llvm/Support/PatternMatch.h"
 
 
-#include "DataFlow.cpp"
+#include "IDFA.cpp"
 
 
 #include <ostream>
@@ -77,59 +77,59 @@ namespace {
 				(*output) |= *gen;
 				return output;
 			}
-			//virtual void initGenKill(int len, Function::iterator BB, ValueMap<T, unsigned> domainToIdx, BitVector &*GenBV, BitVector &*KillBV) {}
 			virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *> &BBtoInfo) {
-				if(isa<PHINode>(ii)){
-					PHINode *pN = dyn_cast<PHINode>(&*ii);
-					//unsigned num = pN->getNumIncomingValues();
-					unsigned idx = pN->getBasicBlockIndex(Si);
-					if (idx >= 0 && idx < pN->getBasicBlockIndex(Si)) {
-						Value *val = pN->getIncomingValue(idx);
-						BasicBlockInfo *Sinf = BBtoInfo[&*Si];
-						unsigned valIdx = domainToIdx[val];
-						if (!((*(Sinf->kill))[valIdx])) {
-							(Sinf->gen)->set(valIdx);
+				for (BasicBlock::iterator ii = Bi->begin(), ie = Bi->end(); ii != ie; ++ii) {
+					BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
+					if(isa<PHINode>(ii)){
+						PHINode *pN = dyn_cast<PHINode>(&*ii);
+						unsigned idx = pN->getBasicBlockIndex(Pi);
+						if (idx >= 0 && idx < pN->getNumIncomingValues()) {
+							Value *val = pN->getIncomingValue(idx);
+							unsigned valIdx = domainToIdx[val];
+							if (!((*(BBinf->kill))[valIdx])) {
+								(BBinf->gen)->set(valIdx);
+							}
 						}
-					}
-					//duplicated code..............I will remove it later.............
-					ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
-					if (iter != domainToIdx.end()) {
-						Value *val = ii;
-						int valIdx = domainToIdx[val];
-						if (!((*(Sinf->gen))[valIdx])) {
-							(BBinf->kill)->set(valIdx);
+						//duplicated code..............I will remove it later.............
+						ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
+						if (iter != domainToIdx.end()) {
+							Value *val = ii;
+							int valIdx = domainToIdx[val];
+							if (!((*(BBinf->gen))[valIdx])) {
+								(BBinf->kill)->set(valIdx);
+							}
 						}
-					}
-				} else {
-					User::op_iterator OI, OE;
-					for (OI = ii->op_begin(), OE = ii->op_end(); OI != OE; ++OI) {
-						Value *val = *OI;
-						if (isa<Instruction>(val) || isa<Argument>(val)) {
-							// val is used by insn
-							//we need to judge whether valIdx is valid or not......if valIdx == -1.....No...just need to judge whether val exists in domainIdx......see below...
+					} else {
+						User::op_iterator OI, OE;
+						for (OI = ii->op_begin(), OE = ii->op_end(); OI != OE; ++OI) {
+							Value *val = *OI;
+							if (isa<Instruction>(val) || isa<Argument>(val)) {
+								// val is used by insn
+								//we need to judge whether valIdx is valid or not......if valIdx == -1.....No...just need to judge whether val exists in domainIdx......see below...
+								//.........How to handle....................................int valIdx = domainToIdx[dyn_cast<instruction>(val)].................
+								int valIdx = domainToIdx[val];
+
+								//Assume that v = v op x will never exist in SSA form
+								//BasicBlock *BB = &*Bi;
+								BitVector tmp = *(BBinf->kill);
+								if (!((tmp)[valIdx])) {
+									(BBinf->gen)->set(valIdx);
+								}
+							}
+
+						}
+						ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
+						if (iter != domainToIdx.end()) {
+							Value *val = ii;
 							//.........How to handle....................................int valIdx = domainToIdx[dyn_cast<instruction>(val)].................
 							int valIdx = domainToIdx[val];
-
-							//Assume that v = v op x will never exist in SSA form
-							//BasicBlock *BB = &*Bi;
-							BitVector tmp = *(BBinf->kill);
+							BitVector tmp = *(BBinf->gen);
 							if (!((tmp)[valIdx])) {
-								(BBinf->gen)->set(valIdx);
+								(BBinf->kill)->set(valIdx);
 							}
 						}
 
 					}
-					ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
-					if (iter != domainToIdx.end()) {
-						Value *val = ii;
-						//.........How to handle....................................int valIdx = domainToIdx[dyn_cast<instruction>(val)].................
-						int valIdx = domainToIdx[val];
-						BitVector tmp = *(BBinf->gen);
-						if (!((tmp)[valIdx])) {
-							(BBinf->kill)->set(valIdx);
-						}
-					}
-
 				}
 			}
 			virtual BitVector* getBoundaryCondition(int len) {
