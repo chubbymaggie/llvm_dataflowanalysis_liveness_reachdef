@@ -180,9 +180,9 @@ namespace {
 					if (*oldOut != *(BBtoInfo[&*Bi]->in)) {
 						errs() << "isChanged!" << "\n";
 
-						for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+						for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
 							//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
-								BasicBlock *BB = *succIt;
+								BasicBlock *BB = *predIt;
 								Worklist.push_back(BB);
 							//}
 						}
