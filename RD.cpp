@@ -56,14 +56,16 @@ namespace {
 			}
 
 			virtual void emitInstructionAnnot(const Instruction *i, formatted_raw_ostream &os) {
-				os << "; ";
-				BitVector &bv = *(InstToInfo[i]->in);
-				for (unsigned i = 0; i < bv.size(); ++i) {
-					if (bv[i]) {
-						os << domain[i]->getName() << ", ";
+				if (!isa<PHINode>(i)) {
+					os << "; ";
+					BitVector &bv = *(InstToInfo[i]->in);
+					for (unsigned i = 0; i < bv.size(); ++i) {
+						if (bv[i]) {
+							os << domain[i]->getName() << ", ";
+						}
 					}
+					os << "\n";
 				}
-				os << "\n";
 			}
 	};
 
@@ -122,7 +124,8 @@ namespace {
 			}
 			
 			virtual void initInstGenKill(Instruction *ii, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<const Instruction *, InstInfo *> &InstToInfo) {
-				//if (isa<PHINode>(ii)) {
+				//do we need to delete the following condition judgement?
+				if (!isa<PHINode>(ii)) {
 					InstInfo *instInf = InstToInfo[ii];
 
 					ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
@@ -131,7 +134,7 @@ namespace {
 						int valIdx = domainToIdx[val];
 						(instInf->gen)->set(valIdx);
 					}
-			    //}
+			    }
 
 			}
 
@@ -140,7 +143,8 @@ namespace {
 				(BBinf->gen)->reset(0, domainToIdx.size());
 				(BBinf->kill)->reset(0, domainToIdx.size());	
 				for (BasicBlock::iterator ii = Bi->begin(), ie = Bi->end(); ii != ie; ++ii) {
-					//if(!isa<PHINode>(ii)){
+					//??????????do we need to delete the following contition judgement?
+					if(!isa<PHINode>(ii)){
 						ValueMap<Value*, unsigned>::const_iterator iter = domainToIdx.find(dyn_cast<Instruction>(ii));
 						if (iter != domainToIdx.end()) {
 							Value *val = ii;
@@ -151,7 +155,7 @@ namespace {
 								(BBinf->gen)->set(valIdx);
 							//}
 						}
-					//}
+					}
 
 				}
 			}

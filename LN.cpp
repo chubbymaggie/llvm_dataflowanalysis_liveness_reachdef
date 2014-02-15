@@ -56,14 +56,19 @@ namespace {
 			}
 
 			virtual void emitInstructionAnnot(const Instruction *i, formatted_raw_ostream &os) {
-				os << "; ";
-				BitVector &bv = *(InstToInfo[i]->in);
-				for (unsigned i = 0; i < bv.size(); ++i) {
-					if (bv[i]) {
-						os << domain[i]->getName() << ", ";
+				if (!isa<PHINode>(i)) {
+					os << "; ";
+					BitVector &bv = *(InstToInfo[i]->in);
+					for (unsigned i = 0; i < bv.size(); ++i) {
+						if (bv[i]) {
+							os << domain[i]->getName() << ", ";
+						}
 					}
+					os << "\n";
+				} else {
+					//do nothing
+
 				}
-				os << "\n";
 			}
 	};
 
