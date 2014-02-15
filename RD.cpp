@@ -67,10 +67,10 @@ namespace {
 			}
 	};
 
-	class Liveness : public DataFlow<llvm::Value *>, public FunctionPass {
+	class ReachDef : public DataFlow<llvm::Value *>, public FunctionPass {
 		public:
 			static char ID;
-			Liveness() : DataFlow<llvm::Value *>(), FunctionPass(ID) {
+			ReachDef() : DataFlow<llvm::Value *>(), FunctionPass(ID) {
 
 			}
 
@@ -203,7 +203,12 @@ namespace {
 				}
 			}
 			virtual BitVector* getBoundaryCondition(int len, Function &F, ValueMap<Value *, unsigned> &domainToIdx) {
-				return new BitVector(len, false);
+				BitVector *output = new BitVector(len, false);
+				for (Function::arg_iterator arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
+					Instruction *i = *arg;
+					output.set(domainToIdx[i]);
+				}
+				return output;
 			}
 
 
@@ -221,14 +226,14 @@ namespace {
 
 	// LLVM uses the address of this static member to identify the pass, so the
 	// initialization value is unimportant.
-	char Liveness::ID = 0;
+	char ReachDef::ID = 0;
 
 	// Register this pass to be used by language front ends.
 	// This allows this pass to be called using the command:
 	//    clang -c -Xclang -load -Xclang ./FunctionInfo.so loop.c
 	static void registerMyPass(const PassManagerBuilder &,
 			PassManagerBase &PM) {
-		PM.add(new Liveness());
+		PM.add(new ReachDef());
 	}
 	RegisterStandardPasses
 		RegisterMyPass(PassManagerBuilder::EP_EarlyAsPossible,
@@ -238,6 +243,6 @@ namespace {
 	//    clang -c -emit-llvm loop.c
 	//    opt -load ./FunctionInfo.so -function-info loop.bc > /dev/null
 	// See http://llvm.org/releases/3.4/docs/WritingAnLLVMPass.html#running-a-pass-with-opt for more info.
-	RegisterPass<Liveness> X("my-liveness", "my-liveness");
+	RegisterPass<ReachDef> X("my-reachdef", "my-reachdef");
 
 }

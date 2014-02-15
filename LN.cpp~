@@ -55,7 +55,7 @@ namespace {
 				os << "\n";
 			}
 
-			virtual void emitInstrucitionAnnot(const Instruction *i, formatted_raw_ostream &os) {
+			virtual void emitInstructionAnnot(const Instruction *i, formatted_raw_ostream &os) {
 				os << "; ";
 				BitVector &bv = *(InstToInfo[i]->in);
 				for (unsigned i = 0; i < bv.size(); ++i) {
@@ -202,7 +202,7 @@ namespace {
 					}
 				}
 			}
-			virtual BitVector* getBoundaryCondition(int len) {
+			virtual BitVector* getBoundaryCondition(int len, Function &F) {
 				return new BitVector(len, false);
 			}
 

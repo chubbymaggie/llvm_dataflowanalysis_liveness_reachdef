@@ -84,7 +84,7 @@ namespace {
 		}
 		*/
 
-		void analysis(std::vector<T> domain, Function& F, bool isForward, ValueMap<const BasicBlock *, BasicBlockInfo *> &BBtoInfo, ValueMap<Instruction *, InstInfo *> &InstToInfo) {
+		void analysis(std::vector<T> domain, Function& F, bool isForward, ValueMap<const BasicBlock *, BasicBlockInfo *> &BBtoInfo, ValueMap<const Instruction *, InstInfo *> &InstToInfo) {
 			//map the domain entry to index
 			ValueMap<T, unsigned> domainToIdx;
 			for (int i = 0; i < domain.size(); ++i) {
@@ -101,15 +101,31 @@ namespace {
 				BBtoInfo[&*Bi] = new BasicBlockInfo(&*Bi, domain.size());
 			}
 
-			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
-				//init the BBtoInfo
-				BBtoInfo[&*Bi]->in = initFlowValues(domain.size());
+
+			if (!isForward) {
+				for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+					//init the BBtoInfo
+					BBtoInfo[&*Bi]->in = initFlowValues(domain.size());
+				}
+			} else {
+				for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+					//init the BBtoInfo
+					BBtoInfo[&*Bi]->out = initFlowValues(domain.size());
+				}
+
+
 			}
 
 
-			errs() << "shangxin" <<  F.back().getName() << "\n";
-			BBtoInfo[&(F.back())]->in = getBoundaryCondition(domain.size());
+			if (!isForward) {
+				errs() << "shangxin" <<  F.back().getName() << "\n";
+				//change to out...................haven't check...
+				BBtoInfo[&(F.back())]->out = getBoundaryCondition(domain.size(), F, domainToIdx);
+			} else {
+				BBtoInfo[&(F.front())]->in = getBoundaryCondition(domain.size(), F, domainToIdx);
+			}
 
+			/*
 			//init the flow map
 			std::map<std::pair<BasicBlock*, BasicBlock*>, BitVector *> flowFilter, flowReserve;
 			initFlowFilter(F, flowFilter, flowReserve, domainToIdx);
@@ -129,6 +145,7 @@ namespace {
 				BVprint(piter->second);
 			}
 			errs() << "flag3" << "\n";
+			*/
 
 			std::vector<BasicBlock *> Worklist;
 			if (isForward) {
@@ -336,7 +353,7 @@ namespace {
 		virtual BitVector* transferFunc(BitVector *input, BitVector *gen, BitVector *kill) = 0;
 
 		//Notice: BoundatryCondition for the Reaching Def may vary...argu -> true; instruction -> false....initially
-		virtual BitVector* getBoundaryCondition(int len) = 0;
+		virtual BitVector* getBoundaryCondition(int len, Function &F, ValueMap<Value *, unsigned> &domainToIdx) = 0;
 		virtual BitVector* initFlowValues(int len) = 0;
 	};
 }
