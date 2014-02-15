@@ -1,0 +1,37 @@
+The following theory simply describes my concept of building liveness 
+and reach analysis together in SSA form.
+
+In live analysis (backward), arguments of phi functions will lead to
+unnecessaery propagation to predecessors which will generate a bigger
+live set. In order to avoid this, for each argument "v" of phi functions
+one has to check if the target predecessor lies on one of the control
+flow path from "def(v)" to "phi(v, ...)". This is the same as checking
+the reachability of "def(v)" in the predecessor. reachable() function
+in livedfa.txx performs such check.
+
+Definition: In SSA form, a variable "v" is live at program point p
+means that p is on one of control flow path from "def(v)" to one
+of the "use(v)".
+
+Definition: In SSA form, a definition of a variable "v" is reachable
+at program point p if there exits at least one control flow path 
+from "def(v)" to p.
+
+Theorem #1:
+In SSA form if we treat "variable" and its corresponding "definition"
+as the same object, the minimal live set is the "subset" of the reach set
+on each program point.
+
+Proof> Given that variable "v" is live at program point p, by the definition
+of liveness, p is on the control flow path from "def(v)" to some "use(v)".
+Since in SSA form "v" can only correspon to a single defition "def(v)" and
+there is a path from "def(v)" to p, then by the defition of reachability 
+"dev(v)" is reachable at p.
+
+One way not to deal with phi node in liveness analysis is to generate a bigger
+live set first (propagating every variables to it's predecessors). By applying
+the reachability analysis on the same function, we parse the live set with
+the reach set by taking intersection. Since the smallest live set is a subset
+of reach set, some reduntdent variables will be removed. One flaw of this
+method is that if we don't treat the LHS of PHI as definitions, then we can't
+use this method.

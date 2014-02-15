@@ -1,0 +1,12 @@
+clang -O0 -emit-llvm -c *.c
+opt -mem2reg cfg.bc -o cfg-simp.bc
+opt -mem2reg loop.bc -o loop-simp.bc
+opt -mem2reg loop2.bc -o loop2-simp.bc
+opt -mem2reg test1.bc -o test1-simp.bc
+llvm-dis cfg-simp.bc
+llvm-dis loop-simp.bc
+llvm-dis loop2-simp.bc
+llvm-dis loop.bc
+llvm-dis test.bc
+clang cfg.c -o cfg
+#clang loop.c -o loop

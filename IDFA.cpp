@@ -122,8 +122,10 @@ namespace {
 				//change to out...................haven't check...
 				BBtoInfo[&(F.back())]->out = getBoundaryCondition(domain.size(), F, domainToIdx);
 			} else {
+				//delete first..... release the memory
 				BBtoInfo[&(F.front())]->in = getBoundaryCondition(domain.size(), F, domainToIdx);
 			}
+			BVprint(BBtoInfo[&(F.front())]->in);
 
 			/*
 			//init the flow map
@@ -162,16 +164,119 @@ namespace {
 					Worklist.push_back(&*Bi);
 				}
 			}
-			while (!Worklist.empty()) {
+			
+			/*
+			while (!Worklist.empty()) {}
 				BasicBlock *Bi = Worklist.back();
 				Worklist.pop_back();
 				BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
 				//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
 				//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+			*/
 
-				if (isForward) {
+			if (isForward) {
+
+				while (!Worklist.empty()) {
+					BasicBlock *Bi = Worklist.back();
+					Worklist.pop_back();
+					BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
+					//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+					//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+
+
+					BitVector *oldOut = new BitVector(*(BBinf->in));
+
+					for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
+						BasicBlock *Pi = *predIt;
+						BasicBlockInfo *Pinf = BBtoInfo[Pi];
+						initGenKill(Pi, Bi, domainToIdx, BBtoInfo);
+
+						errs() << Pi->getName() << "->" << Bi->getName() << "\n";
+						//BVprint(Pinf->gen
+
+						Pinf->out = transferFunc(Pinf->in, Pinf->gen, Pinf->kill);
+
+						if (predIt == pred_begin(Bi)) {
+							*(BBinf->in) = *(Pinf->out);
+						} else {
+							meetOp(BBinf->in, Pinf->out);
+						}
+
+					}
+
+					if (*oldOut != *(BBinf->in)) {
+						errs() << "isChanged!" << "\n";
+						for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+							//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
+							BasicBlock *BB = *succIt;
+							Worklist.push_back(BB);
+							//}
+						}
+					}
+				}
+
+
+				errs() << "output:............\n";
+
+				for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+					errs() << "BB name.....:" << Bi->getName() << "\n";
+					BVprint(BBtoInfo[&*Bi]->in);
+				}
+
+
+
+
+				//ValueMap<Instruction *, InstInfo *> InstToInfo;
+				for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+					errs() << "BB name.^^^^^^^:" << Bi->getName() << "\n";
+					BasicBlock::iterator ii, ie;
+					for (ii = Bi->begin(), ie = Bi->end(); ii != ie; ++ii) {
+						errs() << "%$$$$$$$$$$$$$$$$$\n";
+						InstToInfo[&*ii] = new InstInfo(&*ii, domain.size());
+
+						initInstGenKill(&*ii, domainToIdx, InstToInfo);
+
+						errs() << *ii << "\n";
+
+						errs() << "GEN:";
+						BVprint(InstToInfo[&*ii]->gen);
+						errs() << "KILL:";
+						BVprint(InstToInfo[&*ii]->kill);
+
+						errs() << "###################\n";
+						
+
+						if (ii == (Bi->begin())) {
+							InstToInfo[&*ii]->in = BBtoInfo[&*Bi]->in;
+						} else {
+							BasicBlock::iterator ij = (--ii);
+							++ii;
+							InstToInfo[&*ii]->in = InstToInfo[&*(ij)]->out;
+
+						}
+						InstToInfo[&*ii]->out = transferFunc(InstToInfo[&*ii]->in, InstToInfo[&*ii]->gen, InstToInfo[&*ii]->kill);
+					}
+
+					errs() << "ssssssssssssssssssssssss\n";
+					//two pointer point to the same variable.....
+					BBtoInfo[&*Bi]->out = InstToInfo[&*(--ie)]->out;
+
+					errs() << "bbbbbbbbbbbbbbbbbb\n";
+					BVprint(BBtoInfo[&*Bi]->out);
+				}
+
+
 
 				} else {
+
+					while (!Worklist.empty()) {
+						BasicBlock *Bi = Worklist.back();
+						Worklist.pop_back();
+						BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
+						//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+						//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+
+
 					BitVector *oldOut = new BitVector(*(BBinf->out)); 
 					
 					for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
@@ -233,63 +338,58 @@ namespace {
 							//}
 						}
 					}
-
-
-				}
-				/*
-				errs() << "BB name:" << Bi->getName() << "\n";
-				errs() << "in:";
-				BVprint(BBtoInfo[&*Bi]->in);
-				errs() << "out:";
-				BVprint(BBtoInfo[&*Bi]->out);
-				*/
-			}
-
-			errs() << "output:............\n";
-
-			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
-				errs() << "BB name.....:" << Bi->getName() << "\n";
-				BVprint(BBtoInfo[&*Bi]->out);
-			}
-
-			//ValueMap<Instruction *, InstInfo *> InstToInfo;
-			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
-
-				errs() << "BB name.^^^^^^^:" << Bi->getName() << "\n";
-				BasicBlock::iterator ii = Bi->end(), is = Bi->begin();
-				//InstInfo *curInstInfo;
-				while (true) {
-					--ii;
-					InstToInfo[&*ii] = new InstInfo(&*ii, domain.size());
-					//curInstInfo = new InstInfo(&*ii, domain.size());
-					initInstGenKill(&*ii, domainToIdx, InstToInfo);
-
-					if (ii == (--(Bi->end()))) {
-						//two pointer point to the same variable.....
-						//curInstInfo->out = BBtoInfo[&*Bi]->out;
-						InstToInfo[&*ii]->out = BBtoInfo[&*Bi]->out;
-					} else {
-						//curInstInfo->out = InstToInfo[&*(--ii)]->in;
-						//++ii;
-						BasicBlock::iterator ij = (++ii);
-						--ii;
-						InstToInfo[&*ii]->out = InstToInfo[&*(ij)]->in;
-						
-					}				
-					//InstToInfo[&*ii]->in = transferFunc(curInstInfo->out, curInstInfo->gen, curInstInfo->kill);	
-					InstToInfo[&*ii]->in = transferFunc(InstToInfo[&*ii]->out, InstToInfo[&*ii]->gen, InstToInfo[&*ii]->kill);	
-					//errs() << *ii << "----";
-					//BVprint(InstToInfo[&*ii]->out);
-
-					if (ii == is) {
-						break;
 					}
+
+					errs() << "output:............\n";
+
+					for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+						errs() << "BB name.....:" << Bi->getName() << "\n";
+						BVprint(BBtoInfo[&*Bi]->out);
+					}
+
+					//ValueMap<Instruction *, InstInfo *> InstToInfo;
+					for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+
+						errs() << "BB name.^^^^^^^:" << Bi->getName() << "\n";
+						BasicBlock::iterator ii = Bi->end(), is = Bi->begin();
+						//InstInfo *curInstInfo;
+						while (true) {
+							--ii;
+							InstToInfo[&*ii] = new InstInfo(&*ii, domain.size());
+							//curInstInfo = new InstInfo(&*ii, domain.size());
+							initInstGenKill(&*ii, domainToIdx, InstToInfo);
+
+							if (ii == (--(Bi->end()))) {
+								//two pointer point to the same variable.....
+								//curInstInfo->out = BBtoInfo[&*Bi]->out;
+								InstToInfo[&*ii]->out = BBtoInfo[&*Bi]->out;
+							} else {
+								//curInstInfo->out = InstToInfo[&*(--ii)]->in;
+								//++ii;
+								BasicBlock::iterator ij = (++ii);
+								--ii;
+								InstToInfo[&*ii]->out = InstToInfo[&*(ij)]->in;
+
+							}				
+							//InstToInfo[&*ii]->in = transferFunc(curInstInfo->out, curInstInfo->gen, curInstInfo->kill);	
+							InstToInfo[&*ii]->in = transferFunc(InstToInfo[&*ii]->out, InstToInfo[&*ii]->gen, InstToInfo[&*ii]->kill);	
+							//errs() << *ii << "----";
+							//BVprint(InstToInfo[&*ii]->out);
+
+							if (ii == is) {
+								break;
+							}
+						}
+						//two pointer point to the same variable.....
+						BBtoInfo[&*Bi]->in = InstToInfo[&*ii]->in;
+						BVprint(BBtoInfo[&*Bi]->in);
+					}
+
+
 				}
-				//two pointer point to the same variable.....
-				BBtoInfo[&*Bi]->in = InstToInfo[&*ii]->in;
-				BVprint(BBtoInfo[&*Bi]->in);
-			}
-			
+
+
+					
 			//Annotator annot(BBtoInfo, InstToInfo, domainToIdx);
 			//F.print(errs(), &annot);
 		}
