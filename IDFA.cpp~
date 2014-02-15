@@ -20,6 +20,10 @@
 
 
 
+#include "llvm/Assembly/AssemblyAnnotationWriter.h"
+#include "llvm/Support/FormattedStream.h"
+
+
 #include <ostream>
 #include <fstream>
 #include <iostream>
@@ -61,7 +65,6 @@ namespace {
 	};
 
 
-
 	template<class T>
 	class DataFlow {
 		public:
@@ -81,7 +84,7 @@ namespace {
 		}
 		*/
 
-		void analysis(std::vector<T> domain, Function& F, bool isForward) {
+		void analysis(std::vector<T> domain, Function& F, bool isForward, ValueMap<const BasicBlock *, BasicBlockInfo *> &BBtoInfo, ValueMap<Instruction *, InstInfo *> &InstToInfo) {
 			//map the domain entry to index
 			ValueMap<T, unsigned> domainToIdx;
 			for (int i = 0; i < domain.size(); ++i) {
@@ -91,7 +94,7 @@ namespace {
 			//Boundary Condition, and the top....
 			//We don't need to calc top, since we have guarantee the meetOp....top meet any = any....
 
-			ValueMap<BasicBlock *, BasicBlockInfo *> BBtoInfo;
+			//ValueMap<BasicBlock *, BasicBlockInfo *> BBtoInfo;
 			//...........generate the BBtoInfo............
 			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
 				//init the BBtoInfo
@@ -232,7 +235,7 @@ namespace {
 				BVprint(BBtoInfo[&*Bi]->out);
 			}
 
-			ValueMap<Instruction *, InstInfo *> InstToInfo;
+			//ValueMap<Instruction *, InstInfo *> InstToInfo;
 			for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
 
 				errs() << "BB name.^^^^^^^:" << Bi->getName() << "\n";
@@ -269,7 +272,9 @@ namespace {
 				BBtoInfo[&*Bi]->in = InstToInfo[&*ii]->in;
 				BVprint(BBtoInfo[&*Bi]->in);
 			}
-
+			
+			//Annotator annot(BBtoInfo, InstToInfo, domainToIdx);
+			//F.print(errs(), &annot);
 		}
 		//print the Bitvector
 		void BVprint(BitVector* BV) {
@@ -324,8 +329,8 @@ namespace {
 			}
 		}
 
-		virtual void initInstGenKill(Instruction *ii, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<Instruction *, InstInfo *> &InstToInfo) = 0;
-		virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *> &BBtoInfo) = 0;
+		virtual void initInstGenKill(Instruction *ii, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<const Instruction *, InstInfo *> &InstToInfo) = 0;
+		virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<const BasicBlock *, BasicBlockInfo *> &BBtoInfo) = 0;
 		virtual void meetOp(BitVector *op1, BitVector *op2) = 0;
 
 		virtual BitVector* transferFunc(BitVector *input, BitVector *gen, BitVector *kill) = 0;

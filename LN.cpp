@@ -22,6 +22,8 @@
 
 #include "llvm/Support/PatternMatch.h"
 
+#include "llvm/Assembly/AssemblyAnnotationWriter.h"
+
 
 #include "IDFA.cpp"
 
@@ -33,6 +35,37 @@
 using namespace llvm;
 
 namespace {
+	class Annotator : public AssemblyAnnotationWriter {
+		public:
+			ValueMap<const BasicBlock *, BasicBlockInfo *> &BBtoInfo;		
+			ValueMap<const Instruction *, InstInfo *> &InstToInfo;
+			std::vector<Value*> &domain;
+			Annotator(ValueMap<const BasicBlock *, BasicBlockInfo *> &BI, ValueMap<const Instruction *, InstInfo *> &II, std::vector<Value*> &dm): BBtoInfo(BI), InstToInfo(II), domain(dm) {
+			}
+
+			virtual void emitBasicBlockStartAnnot(const BasicBlock *bb, formatted_raw_ostream &os) {
+				os << "; ";
+				//BasicBlock *bi = *bb;
+				BitVector &bv = *(BBtoInfo[bb]->in);
+				for (unsigned i = 0; i < bv.size(); ++i) {
+					if (bv[i]) {
+						os << domain[i]->getName() << ", ";
+					}
+				}
+				os << "\n";
+			}
+
+			virtual void emitInstructionAnnot(const Instruction *i, formatted_raw_ostream &os) {
+				os << "; ";
+				BitVector &bv = *(InstToInfo[i]->in);
+				for (unsigned i = 0; i < bv.size(); ++i) {
+					if (bv[i]) {
+						os << domain[i]->getName() << ", ";
+					}
+				}
+				os << "\n";
+			}
+	};
 
 	class Liveness : public DataFlow<llvm::Value *>, public FunctionPass {
 		public:
@@ -60,7 +93,17 @@ namespace {
 				errs() << "\n";
 
 
-				DataFlow<Value *>::analysis(domain, F, false);
+
+				ValueMap<const BasicBlock *, BasicBlockInfo *> BBtoInfo;		
+				ValueMap<const Instruction *, InstInfo *> InstToInfo;
+
+				//DataFlow<Value *>::analysis(domain, F, false);
+				DataFlow<Value *>::analysis(domain, F, false, BBtoInfo, InstToInfo);
+
+				Annotator annot(BBtoInfo, InstToInfo, domain);
+				F.print(errs(), &annot);
+
+
 				return false;
 			}
 
@@ -78,7 +121,7 @@ namespace {
 				return output;
 			}
 			
-			virtual void initInstGenKill(Instruction *ii, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<Instruction *, InstInfo *> &InstToInfo) {
+			virtual void initInstGenKill(Instruction *ii, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<const Instruction *, InstInfo *> &InstToInfo) {
 				InstInfo *instInf = InstToInfo[ii];
 				//what if  v = v + 1 case.....
 				User::op_iterator OI, OE;
@@ -98,7 +141,7 @@ namespace {
 					(instInf->kill)->set(valIdx);
 				}
 			}
-			virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<BasicBlock *, BasicBlockInfo *> &BBtoInfo) {
+			virtual void initGenKill(BasicBlock *Bi, BasicBlock *Pi, ValueMap<Value *, unsigned> &domainToIdx, ValueMap<const BasicBlock *, BasicBlockInfo *> &BBtoInfo) {
 				BasicBlockInfo *BBinf = BBtoInfo[&*Bi];
 				(BBinf->gen)->reset(0, domainToIdx.size());
 				(BBinf->kill)->reset(0, domainToIdx.size());	
@@ -113,8 +156,6 @@ namespace {
 							if (isa<Instruction>(val) || isa<Argument>(val)) {
 								unsigned valIdx = domainToIdx[val];
 								if (!((*(BBinf->kill))[valIdx])) {
-									//errs() << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
-									//errs() << "idx:" << idx << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
 									(BBinf->gen)->set(valIdx);
 								}
 							}
@@ -125,9 +166,6 @@ namespace {
 							Value *val = ii;
 							int valIdx = domainToIdx[val];
 							if (!((*(BBinf->gen))[valIdx])) {
-								//errs() << "2&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n";
-								//errs() << "valIdx:" << valIdx << "val:" << val->getName() << "\n";
-									
 								(BBinf->kill)->set(valIdx);
 							}
 						}
