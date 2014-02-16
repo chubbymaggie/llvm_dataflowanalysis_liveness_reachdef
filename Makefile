@@ -1,4 +1,4 @@
-all: LN.so
+all: Liveness.so Reachdef.so
 
 CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0
 
