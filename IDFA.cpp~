@@ -1,4 +1,4 @@
-// 15-745 S13 Assignment 1: FunctionInfo.cpp
+// CS380C S14 Assignment 3: IDFA.cpp
 // 
 // Based on code from Todd C. Mowry
 // Modified by Arthur Peters
@@ -41,49 +41,124 @@ namespace {
 	};
 
 	template<class T>
-		class DataFlow {
+		class IDFA {
 			public:
-			DataFlow() {
+				IDFA() {
 				}
-				/*
-				   DataFlow(std::vector<T> domain, bool forward) {
+				typedef ValueMap<const BasicBlock *, idfaInfo *> BinfoMap;
+				typedef ValueMap<const Instruction *, idfaInfo *> IinfoMap;
+				
+				void setFlowValues(Function &F, BinfoMap &BBtoInfo, bool isForward, int len) {
+					if (isForward) {
+						//for forward Interative DataFlow Analysis, init with in[B] = initFlowValue
+						for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+							//init the BBtoInfo
+							BBtoInfo[&*Bi]->in = initFlowValues(len);
+						}
+					} else {
+						//for backward Interative DataFlow Analysis, init with out[B] = initFlowValue
+						for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
+							BBtoInfo[&*Bi]->out = initFlowValues(len);
+						}
+					}
+				}
 
-				   }
-				   */
-				void analysis(std::vector<T> domain, Function& F, bool isForward, ValueMap<const BasicBlock *, idfaInfo *> &BBtoInfo, ValueMap<const Instruction *, idfaInfo *> &InstToInfo) {
+
+				void setBoundaryCondition(Function &F, BinfoMap &BBtoInfo, bool isForward, ValueMap<T, unsigned> &domainToIdx) {
+					if (isForward) {
+						//delete first..... release the memory
+						//delete BBtoInfo[&(F.front())]->in;
+						BBtoInfo[&(F.front())]->in = getBoundaryCondition(domainToIdx.size(), F, domainToIdx);
+					} else {
+						BBtoInfo[&(F.back())]->out = getBoundaryCondition(domainToIdx.size(), F, domainToIdx);
+					}
+				}
+
+
+				void postorder(BinfoMap &BBtoInfo, std::vector<BasicBlock *> &Worklist, ValueMap<T, unsigned> &domainToIdx) {
+					BasicBlock *Bi = Worklist.back();
+					Worklist.pop_back();
+					idfaInfo *BBinf = BBtoInfo[&*Bi];
+					//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+					//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+
+
+					BitVector *oldOut = new BitVector(*(BBinf->out)); 
+
+					for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+						BasicBlock *Si = *succIt;
+						idfaInfo *Sinf = BBtoInfo[Si];
+						initGenKill(Si, Bi, domainToIdx, BBtoInfo);
+
+						//Sinf->in is always a new value, pointer redirect...so we don't need to reset Sinf->in
+						//delete Sinf->in;
+						Sinf->in = transferFunc(Sinf->out, Sinf->gen, Sinf->kill);
+						if (succIt == succ_begin(Bi)) {
+							*(BBinf->out) = *(Sinf->in);
+						} else {
+							meetOp(BBinf->out, Sinf->in);	
+						}
+					}
+
+					if (*oldOut != *(BBinf->out)) {
+						for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
+							//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
+							BasicBlock *BB = *predIt;
+							Worklist.push_back(BB);
+							//}
+						}
+
+
+					}
+				}
+
+				void preorder(BinfoMap &BBtoInfo, std::vector<BasicBlock *> &Worklist, ValueMap<T, unsigned> &domainToIdx) {
+					BasicBlock *Bi = Worklist.back();
+					Worklist.pop_back();
+					idfaInfo *BBinf = BBtoInfo[&*Bi];
+					//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+					//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+					BitVector *oldOut = new BitVector(*(BBinf->in));
+					for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
+						BasicBlock *Pi = *predIt;
+						idfaInfo *Pinf = BBtoInfo[Pi];
+						initGenKill(Pi, Bi, domainToIdx, BBtoInfo);
+
+						Pinf->out = transferFunc(Pinf->in, Pinf->gen, Pinf->kill);
+						if (predIt == pred_begin(Bi)) {
+							*(BBinf->in) = *(Pinf->out);
+						} else {
+							meetOp(BBinf->in, Pinf->out);
+						}
+					}
+					if (*oldOut != *(BBinf->in)) {
+						for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+							//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
+							BasicBlock *BB = *succIt;
+							Worklist.push_back(BB);
+							//}
+						}
+					}
+
+				}
+
+				void analysis(std::vector<T> domain, Function& F, bool isForward, BinfoMap &BBtoInfo, IinfoMap &InstToInfo) {
 					//map the domain entry to index
 					ValueMap<T, unsigned> domainToIdx;
 					for (int i = 0; i < domain.size(); ++i) {
 						domainToIdx[domain[i]] = i;
 					}
 
-					//Boundary Condition, and the top....
-					//ValueMap<BasicBlock *, idfaInfo *> BBtoInfo;
-					//...........generate the BBtoInfo............
 					for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
 						//init the BBtoInfo
 						BBtoInfo[&*Bi] = new idfaInfo(domain.size());
 					}
-					if (!isForward) {
-						for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
-							//init the BBtoInfo
-							BBtoInfo[&*Bi]->in = initFlowValues(domain.size());
-						}
-					} else {
-						for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
-							//init the BBtoInfo
-							BBtoInfo[&*Bi]->out = initFlowValues(domain.size());
-						}
-					}
-					if (!isForward) {
-						//change to out...................haven't check...
-						BBtoInfo[&(F.back())]->out = getBoundaryCondition(domain.size(), F, domainToIdx);
-					} else {
-						//delete first..... release the memory
-						BBtoInfo[&(F.front())]->in = getBoundaryCondition(domain.size(), F, domainToIdx);
-					}
-					BVprint(BBtoInfo[&(F.front())]->in);
 
+					//set the initial flow values for each block with the client defined initFlowValue function
+					setFlowValues(F, BBtoInfo, isForward, domain.size());
+					//set the Boundary Condition
+					setBoundaryCondition(F, BBtoInfo, isForward, domainToIdx);
+					
 					std::vector<BasicBlock *> Worklist;
 					if (isForward) {
 						Function::iterator Bi = F.end(), Bs = F.begin();
@@ -100,41 +175,23 @@ namespace {
 						}
 					}
 
+
 					if (isForward) {
 						while (!Worklist.empty()) {
-							BasicBlock *Bi = Worklist.back();
-							Worklist.pop_back();
-							idfaInfo *BBinf = BBtoInfo[&*Bi];
-							//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
-							//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+							preorder(BBtoInfo, Worklist, domainToIdx);
+						}	
+					} else {
+						while (!Worklist.empty()) {
+							postorder(BBtoInfo, Worklist, domainToIdx);
+						}	
+					}
 
+					//Annotator annot(BBtoInfo, InstToInfo, domainToIdx);
+					//F.print(errs(), &annot);
+					//
+					//
 
-							BitVector *oldOut = new BitVector(*(BBinf->in));
-							for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
-								BasicBlock *Pi = *predIt;
-								idfaInfo *Pinf = BBtoInfo[Pi];
-								initGenKill(Pi, Bi, domainToIdx, BBtoInfo);
-
-								Pinf->out = transferFunc(Pinf->in, Pinf->gen, Pinf->kill);
-								if (predIt == pred_begin(Bi)) {
-									*(BBinf->in) = *(Pinf->out);
-								} else {
-									meetOp(BBinf->in, Pinf->out);
-								}
-
-							}
-
-							if (*oldOut != *(BBinf->in)) {
-								for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
-									//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
-									BasicBlock *BB = *succIt;
-									Worklist.push_back(BB);
-									//}
-								}
-							}
-						}
-
-						//ValueMap<Instruction *, idfaInfo *> InstToInfo;
+					if (isForward) {
 						for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
 							BasicBlock::iterator ii, ie;
 							for (ii = Bi->begin(), ie = Bi->end(); ii != ie; ++ii) {
@@ -150,49 +207,11 @@ namespace {
 								}
 								InstToInfo[&*ii]->out = transferFunc(InstToInfo[&*ii]->in, InstToInfo[&*ii]->gen, InstToInfo[&*ii]->kill);
 							}
-
 							//two pointer point to the same variable.....
 							BBtoInfo[&*Bi]->out = InstToInfo[&*(--ie)]->out;
-
-							BVprint(BBtoInfo[&*Bi]->out);
 						}
+
 					} else {
-
-						while (!Worklist.empty()) {
-							BasicBlock *Bi = Worklist.back();
-							Worklist.pop_back();
-							idfaInfo *BBinf = BBtoInfo[&*Bi];
-							//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
-							//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
-
-
-							BitVector *oldOut = new BitVector(*(BBinf->out)); 
-
-							for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
-								BasicBlock *Si = *succIt;
-								idfaInfo *Sinf = BBtoInfo[Si];
-								initGenKill(Si, Bi, domainToIdx, BBtoInfo);
-
-
-								//Sinf->in is always a new value, pointer redirect...so we don't need to reset Sinf->in
-								//delete Sinf->in;
-								Sinf->in = transferFunc(Sinf->out, Sinf->gen, Sinf->kill);
-								if (succIt == succ_begin(Bi)) {
-									*(BBinf->out) = *(Sinf->in);
-								} else {
-									meetOp(BBinf->out, Sinf->in);	
-								}
-							}
-
-							if (*oldOut != *(BBinf->out)) {
-								for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
-									//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
-									BasicBlock *BB = *predIt;
-									Worklist.push_back(BB);
-									//}
-								}
-							}
-						}
 
 						for (Function::iterator Bi = F.begin(), Be = F.end(); Bi != Be; ++Bi) {
 							BasicBlock::iterator ii = Bi->end(), is = Bi->begin();
@@ -211,7 +230,6 @@ namespace {
 									BasicBlock::iterator ij = (++ii);
 									--ii;
 									InstToInfo[&*ii]->out = InstToInfo[&*(ij)]->in;
-
 								}				
 								InstToInfo[&*ii]->in = transferFunc(InstToInfo[&*ii]->out, InstToInfo[&*ii]->gen, InstToInfo[&*ii]->kill);	
 
@@ -221,15 +239,13 @@ namespace {
 							}
 							//two pointer point to the same variable.....
 							BBtoInfo[&*Bi]->in = InstToInfo[&*ii]->in;
-							BVprint(BBtoInfo[&*Bi]->in);
 						}
-
 
 					}
 
-					//Annotator annot(BBtoInfo, InstToInfo, domainToIdx);
-					//F.print(errs(), &annot);
+
 				}
+
 				//print the Bitvector
 				void BVprint(BitVector* BV) {
 					for (int i = 0; i < (*BV).size(); ++i) {

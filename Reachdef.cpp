@@ -1,4 +1,4 @@
-// 15-745 S13 Assignment 1: FunctionInfo.cpp
+// CS380C S14 Assignment 3: Liveness.cpp
 // 
 // Based on code from Todd C. Mowry
 // Modified by Arthur Peters
@@ -62,10 +62,10 @@ namespace {
 			}
 	};
 
-	class ReachDef : public DataFlow<llvm::Value *>, public FunctionPass {
+	class ReachDef : public IDFA<llvm::Value *>, public FunctionPass {
 		public:
 			static char ID;
-			ReachDef() : DataFlow<llvm::Value *>(), FunctionPass(ID) {
+			ReachDef() : IDFA<llvm::Value *>(), FunctionPass(ID) {
 			}
 
 			virtual bool runOnFunction(Function &F) {
@@ -82,7 +82,7 @@ namespace {
 				ValueMap<const BasicBlock *, idfaInfo *> BBtoInfo;		
 				ValueMap<const Instruction *, idfaInfo *> InstToInfo;
 
-				DataFlow<Value *>::analysis(domain, F, true, BBtoInfo, InstToInfo);
+				IDFA<Value *>::analysis(domain, F, true, BBtoInfo, InstToInfo);
 
 				Annotator annot(BBtoInfo, InstToInfo, domain);
 				F.print(errs(), &annot);

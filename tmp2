@@ -74,74 +74,6 @@ namespace {
 					}
 				}
 
-
-				void postorder(BinfoMap &BBtoInfo, std::vector<BasicBlock *> &Worklist, ValueMap<T, unsigned> &domainToIdx) {
-					BasicBlock *Bi = Worklist.back();
-					Worklist.pop_back();
-					idfaInfo *BBinf = BBtoInfo[&*Bi];
-					//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
-					//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
-
-
-					BitVector *oldOut = new BitVector(*(BBinf->out)); 
-
-					for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
-						BasicBlock *Si = *succIt;
-						idfaInfo *Sinf = BBtoInfo[Si];
-						initGenKill(Si, Bi, domainToIdx, BBtoInfo);
-
-						//Sinf->in is always a new value, pointer redirect...so we don't need to reset Sinf->in
-						//delete Sinf->in;
-						Sinf->in = transferFunc(Sinf->out, Sinf->gen, Sinf->kill);
-						if (succIt == succ_begin(Bi)) {
-							*(BBinf->out) = *(Sinf->in);
-						} else {
-							meetOp(BBinf->out, Sinf->in);	
-						}
-					}
-
-					if (*oldOut != *(BBinf->out)) {
-						for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
-							//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
-							BasicBlock *BB = *predIt;
-							Worklist.push_back(BB);
-							//}
-						}
-
-
-					}
-				}
-
-				void preorder(BinfoMap &BBtoInfo, std::vector<BasicBlock *> &Worklist, ValueMap<T, unsigned> &domainToIdx) {
-					BasicBlock *Bi = Worklist.back();
-					Worklist.pop_back();
-					idfaInfo *BBinf = BBtoInfo[&*Bi];
-					//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
-					//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
-					BitVector *oldOut = new BitVector(*(BBinf->in));
-					for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
-						BasicBlock *Pi = *predIt;
-						idfaInfo *Pinf = BBtoInfo[Pi];
-						initGenKill(Pi, Bi, domainToIdx, BBtoInfo);
-
-						Pinf->out = transferFunc(Pinf->in, Pinf->gen, Pinf->kill);
-						if (predIt == pred_begin(Bi)) {
-							*(BBinf->in) = *(Pinf->out);
-						} else {
-							meetOp(BBinf->in, Pinf->out);
-						}
-					}
-					if (*oldOut != *(BBinf->in)) {
-						for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
-							//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
-							BasicBlock *BB = *succIt;
-							Worklist.push_back(BB);
-							//}
-						}
-					}
-
-				}
-
 				void analysis(std::vector<T> domain, Function& F, bool isForward, BinfoMap &BBtoInfo, IinfoMap &InstToInfo) {
 					//map the domain entry to index
 					ValueMap<T, unsigned> domainToIdx;
@@ -178,14 +110,70 @@ namespace {
 
 					if (isForward) {
 						while (!Worklist.empty()) {
-							preorder(BBtoInfo, Worklist, domainToIdx);
+							BasicBlock *Bi = Worklist.back();
+							Worklist.pop_back();
+							idfaInfo *BBinf = BBtoInfo[&*Bi];
+							//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+							//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
+							BitVector *oldOut = new BitVector(*(BBinf->in));
+							for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
+								BasicBlock *Pi = *predIt;
+								idfaInfo *Pinf = BBtoInfo[Pi];
+								initGenKill(Pi, Bi, domainToIdx, BBtoInfo);
+
+								Pinf->out = transferFunc(Pinf->in, Pinf->gen, Pinf->kill);
+								if (predIt == pred_begin(Bi)) {
+									*(BBinf->in) = *(Pinf->out);
+								} else {
+									meetOp(BBinf->in, Pinf->out);
+								}
+							}
+							if (*oldOut != *(BBinf->in)) {
+								for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+									//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
+									BasicBlock *BB = *succIt;
+									Worklist.push_back(BB);
+									//}
+								}
+							}
 						}	
 					} else {
 						while (!Worklist.empty()) {
-							postorder(BBtoInfo, Worklist, domainToIdx);
-						}	
-					}
+							BasicBlock *Bi = Worklist.back();
+							Worklist.pop_back();
+							idfaInfo *BBinf = BBtoInfo[&*Bi];
+							//BitVector * &bin = (isForward) ? BBinf->in : BBinf->out;
+							//BitVector * &bout = (isForward) ? BBinf->out : BBinf->in;
 
+
+							BitVector *oldOut = new BitVector(*(BBinf->out)); 
+
+							for (succ_iterator succIt = succ_begin(Bi), succE = succ_end(Bi); succIt != succE; ++succIt) {
+								BasicBlock *Si = *succIt;
+								idfaInfo *Sinf = BBtoInfo[Si];
+								initGenKill(Si, Bi, domainToIdx, BBtoInfo);
+
+								//Sinf->in is always a new value, pointer redirect...so we don't need to reset Sinf->in
+								//delete Sinf->in;
+								Sinf->in = transferFunc(Sinf->out, Sinf->gen, Sinf->kill);
+								if (succIt == succ_begin(Bi)) {
+									*(BBinf->out) = *(Sinf->in);
+								} else {
+									meetOp(BBinf->out, Sinf->in);	
+								}
+							}
+
+							if (*oldOut != *(BBinf->out)) {
+								for (pred_iterator predIt = pred_begin(Bi), predE = pred_end(Bi); predIt != predE; ++predIt) {
+									//if (std::find(Worklist.begin(), Worklist.end(), Bi) == Worklist.end()) {
+									BasicBlock *BB = *predIt;
+									Worklist.push_back(BB);
+									//}
+								}
+							}
+						}
+
+					}
 					//Annotator annot(BBtoInfo, InstToInfo, domainToIdx);
 					//F.print(errs(), &annot);
 					//
