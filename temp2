@@ -1,0 +1,324 @@
+// CS380C S14 Assignment 3: IDFA.h
+// 
+// Based on code from Todd C. Mowry
+// Modified by Arthur Peters
+// Modified by Jianyu Huang(UT EID: jh57266)
+////////////////////////////////////////////////////////////////////////////////
+
+
+#include "llvm/Pass.h"
+#include "llvm/PassManager.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/ADT/ValueMap.h"
+#include "llvm/ADT/BitVector.h"
+#include "llvm/Support/CFG.h"
+#include "llvm/Assembly/AssemblyAnnotationWriter.h"
+#include "llvm/Support/FormattedStream.h"
+
+#include <ostream>
+#include <fstream>
+#include <iostream>
+
+
+using namespace llvm;
+
+namespace {
+	/**
+	 * data structure for analysis results (both for basicblock and for instructions)
+	 */
+	class idfaInfo {
+		public:
+			BitVector *gen;
+			BitVector *kill;
+			BitVector *in;
+			BitVector *out;
+			idfaInfo(unsigned len) {
+				gen = new BitVector(len);
+				kill = new BitVector(len);
+				in = new BitVector(len);
+				out = new BitVector(len);
+			}
+	};
+
+	typedef ValueMap<const BasicBlock *, idfaInfo *> BinfoMap;
+	typedef ValueMap<const Instruction *, idfaInfo *> IinfoMap;
+
+	/**
+	 * A skeleton for printing your analysis results.
+	 * Based on code from Arthur Peters
+	 * Modified by Jianyu Huang
+	 */
+	template<class FlowType>
+		class Annotator : public AssemblyAnnotationWriter {
+			public:
+				ValueMap<const BasicBlock *, idfaInfo *> &BBtoInfo;		
+				ValueMap<const Instruction *, idfaInfo *> &InstToInfo;
+				std::vector<FlowType> &domain;
+				Annotator<FlowType>(ValueMap<const BasicBlock *, idfaInfo *> &BI, ValueMap<const Instruction *, idfaInfo *> &II, std::vector<FlowType> &dm): BBtoInfo(BI), InstToInfo(II), domain(dm) {
+				}
+				virtual void emitBasicBlockStartAnnot(const BasicBlock *bb, formatted_raw_ostream &os) {
+					os << "; ";
+					BitVector &bv = *(BBtoInfo[bb]->in);
+					for (unsigned i = 0; i < bv.size(); ++i) {
+						if (bv[i]) {
+							os << domain[i]->getName() << ", ";
+						}
+					}
+					os << "\n";
+				}
+
+				virtual void emitInstructionAnnot(const Instruction *i, formatted_raw_ostream &os) {
+					if (!isa<PHINode>(i)) {
+						os << "; ";
+						BitVector &bv = *(InstToInfo[i]->in);
+						for (unsigned i = 0; i < bv.size(); ++i) {
+							if (bv[i]) {
+								os << domain[i]->getName() << ", ";
+							}
+						}
+						os << "\n";
+					}
+				}
+		};
+	
+	/**
+	 * Iterative DataFlow Analysis Framework
+	 */
+	template<class FlowType>
+		class IDFA {
+			public:
+				IDFA() {}
+				// core function, iteration dataflow analysis
+				void analysis(std::vector<FlowYType> domain, function& f, bool isforward, binfomap &bbtoinfo, iinfomap &insttoinfo);
+				// set the initial flow values for each block with the client defined initflowvalue function
+				void setflowvalues(function &f, binfomap &bbtoinfo, bool isforward, int len); 
+				void setboundarycondition(function &f, binfomap &bbtoinfo, bool isforward, valuemap<flowtype, unsigned> &domaintoidx);
+				void postorder(binfomap &bbtoinfo, std::vector<basicblock *> &worklist, valuemap<flowtype, unsigned> &domaintoidx);
+				void preorder(binfomap &bbtoinfo, std::vector<basicblock *> &worklist, valuemap<flowtype, unsigned> &domaintoidx);
+				void worklistalg(binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx, bool isforward, function &f);
+				void instanalysis(function &f, bool isforward, iinfomap &insttoinfo, binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx);
+				void preorderinst(function &f, iinfomap &insttoinfo, binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx);
+				void postorderinst(function &f, iinfomap &insttoinfo, binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx);
+				virtual void initinstgenkill(instruction *ii, valuemap<value *, unsigned> &domaintoidx, iinfomap &insttoinfo) = 0;
+				virtual void initgenkill(basicblock *bi, basicblock *pi, valuemap<value *, unsigned> &domaintoidx, binfomap &bbtoinfo) = 0;
+				virtual void meetop(bitvector *op1, bitvector *op2) = 0;
+				virtual bitvector* transferfunc(bitvector *input, bitvector *gen, bitvector *kill) = 0;
+				virtual bitvector* getboundarycondition(int len, function &f, valuemap<value *, unsigned> &domaintoidx) = 0;
+				virtual bitvector* initflowvalues(int len) = 0;
+		};
+
+	/**
+	 * core function, iteration dataflow analysis		 		
+	 * 1. set the initial flow value
+	 * 2. set the boundary condition
+	 * 3. compute the in and out set for the block (inlucding computing the gen and kill set for the block)
+	 * 4. compute the in and out set for the instruction (including computing the gen and kill set for the instruction)
+	 */
+	template<class FlowType>
+	void idfa<Flowtype>::analysis(std::vector<flowtype> domain, function& f, bool isforward, binfomap &bbtoinfo, iinfomap &insttoinfo) {
+		//map the domain entry to index
+		valuemap<flowtype, unsigned> domaintoidx;
+		for (int i = 0; i < domain.size(); ++i) {
+			domaintoidx[domain[i]] = i;
+		}
+
+		for (function::iterator bi = f.begin(), be = f.end(); bi != be; ++bi) {
+			//init the bbtoinfo
+			bbtoinfo[&*bi] = new idfainfo(domain.size());
+		}
+		//set the initial flow values for each block with the client defined initflowvalue function
+		setflowvalues(f, bbtoinfo, isforward, domain.size());
+		//set the boundary condition
+		setboundarycondition(f, bbtoinfo, isforward, domaintoidx);
+		worklistalg(bbtoinfo, domaintoidx, isforward, f);
+		instanalysis(f, isforward, insttoinfo, bbtoinfo, domaintoidx);
+	}
+
+	/**
+	 * set the initial flowvalues 
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::setflowvalues(function &f, binfomap &bbtoinfo, bool isforward, int len) {
+		if (isforward) {
+			//for forward interative dataflow analysis, init with in[b] = initflowvalue
+			for (function::iterator bi = f.begin(), be = f.end(); bi != be; ++bi) {
+				//init the bbtoinfo
+				bbtoinfo[&*bi]->in = initflowvalues(len);
+			}
+		} else {
+			//for backward interative dataflow analysis, init with out[b] = initflowvalue
+			for (function::iterator bi = f.begin(), be = f.end(); bi != be; ++bi) {
+				bbtoinfo[&*bi]->out = initflowvalues(len);
+			}
+		}
+	}
+
+	/**
+	 * set the boundary conditions
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::setboundarycondition(function &f, binfomap &bbtoinfo, bool isforward, valuemap<flowtype, unsigned> &domaintoidx) {
+		if (isforward) {
+			//delete first..... release the memory
+			//delete bbtoinfo[&(f.front())]->in;
+			bbtoinfo[&(f.front())]->in = getboundarycondition(domaintoidx.size(), f, domaintoidx);
+		} else {
+			bbtoinfo[&(f.back())]->out = getboundarycondition(domaintoidx.size(), f, domaintoidx);
+		}
+	}
+	
+	/**
+	 * forward analysis of the basic block for the worklist algorithm 
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::preorder(binfomap &bbtoinfo, std::vector<basicblock *> &worklist, valuemap<flowtype, unsigned> &domaintoidx) {
+		basicblock *bi = worklist.back();
+		worklist.pop_back();
+		idfainfo *bbinf = bbtoinfo[&*bi];
+		bitvector *oldout = new bitvector(*(bbinf->in));
+		for (pred_iterator predit = pred_begin(bi), prede = pred_end(bi); predit != prede; ++predit) {
+			basicblock *pi = *predit;
+			idfainfo *pinf = bbtoinfo[pi];
+			initgenkill(pi, bi, domaintoidx, bbtoinfo);
+			pinf->out = transferfunc(pinf->in, pinf->gen, pinf->kill);
+			if (predit == pred_begin(bi)) {
+				*(bbinf->in) = *(pinf->out);
+			} else {
+				meetop(bbinf->in, pinf->out);
+			}
+		}
+		if (*oldout != *(bbinf->in)) {
+			for (succ_iterator succit = succ_begin(bi), succe = succ_end(bi); succit != succe; ++succit) {
+				basicblock *bb = *succit;
+				worklist.push_back(bb);
+			}
+		}
+	}
+
+	/**
+	 * backward analysis of the basic block for the worklist algorithm 
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::postorder(binfomap &bbtoinfo, std::vector<basicblock *> &worklist, valuemap<flowtype, unsigned> &domaintoidx) {
+		basicblock *bi = worklist.back();
+		worklist.pop_back();
+		idfainfo *bbinf = bbtoinfo[&*bi];
+		bitvector *oldout = new bitvector(*(bbinf->out)); 
+		for (succ_iterator succit = succ_begin(bi), succe = succ_end(bi); succit != succe; ++succit) {
+			basicblock *si = *succit;
+			idfainfo *sinf = bbtoinfo[si];
+			initgenkill(si, bi, domaintoidx, bbtoinfo);
+
+			//delete sinf->in;
+			sinf->in = transferfunc(sinf->out, sinf->gen, sinf->kill);
+			if (succit == succ_begin(bi)) {
+				*(bbinf->out) = *(sinf->in);
+			} else {
+				meetop(bbinf->out, sinf->in);	
+			}
+		}
+		if (*oldout != *(bbinf->out)) {
+			for (pred_iterator predit = pred_begin(bi), prede = pred_end(bi); predit != prede; ++predit) {
+				basicblock *bb = *predit;
+				worklist.push_back(bb);
+			}
+		}
+	}
+
+	/**
+	 * worklist algorithm for iterative dataflow analysis
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::worklistalg(binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx, bool isforward, function &f) {
+		std::vector<basicblock *> worklist;
+		if (isforward) {
+			function::iterator bi = f.end(), bs = f.begin();
+			while (true) {
+				-- bi;
+				worklist.push_back(&*bi);
+				if (bi == bs) {
+					break;
+				}
+			}
+		} else {
+			for (function::iterator bi = f.begin(), be = f.end(); bi != be; ++bi) {
+				worklist.push_back(&*bi);
+			}
+		}
+		while (!worklist.empty()) {
+			if (isforward) 
+				preorder(bbtoinfo, worklist, domaintoidx);
+			else 
+				postorder(bbtoinfo, worklist, domaintoidx);
+		}	
+	}
+
+	/**
+	 * dataflow analysis for instruction level
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::instanalysis(function &f, bool isforward, iinfomap &insttoinfo, binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx) {
+		if (isforward) {
+			preorderinst(f, insttoinfo, bbtoinfo, domaintoidx);
+		} else {
+			postorderinst(f, insttoinfo, bbtoinfo, domaintoidx);
+		}
+	}
+
+	/**
+	 * forward analysis for instruction level
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::preorderinst(function &f, iinfomap &insttoinfo, binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx) {
+		for (function::iterator bi = f.begin(), be = f.end(); bi != be; ++bi) {
+			basicblock::iterator ii, ie;
+			for (ii = bi->begin(), ie = bi->end(); ii != ie; ++ii) {
+				insttoinfo[&*ii] = new idfainfo(domaintoidx.size());
+				initinstgenkill(&*ii, domaintoidx, insttoinfo);
+				if (ii == (bi->begin())) {
+					insttoinfo[&*ii]->in = bbtoinfo[&*bi]->in;
+				} else {
+					basicblock::iterator ij = (--ii);
+					++ii;
+					insttoinfo[&*ii]->in = insttoinfo[&*(ij)]->out;
+
+				}
+				insttoinfo[&*ii]->out = transferfunc(insttoinfo[&*ii]->in, insttoinfo[&*ii]->gen, insttoinfo[&*ii]->kill);
+			}
+			bbtoinfo[&*bi]->out = insttoinfo[&*(--ie)]->out;
+		}
+	}
+
+	/**
+	 * backward analysis for instruction level
+	 */
+	template<class flowtype>
+	void idfa<flowtype>::postorderinst(function &f, iinfomap &insttoinfo, binfomap &bbtoinfo, valuemap<flowtype, unsigned> &domaintoidx) {
+		for (function::iterator bi = f.begin(), be = f.end(); bi != be; ++bi) {
+			basicblock::iterator ii = bi->end(), is = bi->begin();
+			while (true) {
+				--ii;
+				insttoinfo[&*ii] = new idfainfo(domaintoidx.size());
+				initinstgenkill(&*ii, domaintoidx, insttoinfo);
+				if (ii == (--(bi->end()))) {
+					insttoinfo[&*ii]->out = bbtoinfo[&*bi]->out;
+				} else {
+					basicblock::iterator ij = (++ii);
+					--ii;
+					insttoinfo[&*ii]->out = insttoinfo[&*(ij)]->in;
+				}				
+				insttoinfo[&*ii]->in = transferfunc(insttoinfo[&*ii]->out, insttoinfo[&*ii]->gen, insttoinfo[&*ii]->kill);	
+
+				if (ii == is) {
+					break;
+				}
+			}
+			bbtoinfo[&*bi]->in = insttoinfo[&*ii]->in;
+		}
+	}
+}

@@ -5,9 +5,9 @@ CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0
 %.so: %.o 
 	$(CXX) -dylib -flat_namespace -shared $^ -o $@
 
-live.o: live.cpp liveAnalysis.h IDFA.h
+#live.o: live.cpp liveAnalysis.cpp liveAnalysis.h IDFA.h IDFA.cpp
 
-reach.o: reach.cpp reachAnalysis.h IDFA.h
+#reach.o: reach.cpp reachAnalysis.cpp reachAnalysis.h IDFA.h IDFA.cpp
 
 clean:
 	rm -f *.o *~ *.so
