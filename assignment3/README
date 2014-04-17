@@ -1,0 +1,9 @@
+See pro3.pdf for details about the requirement.
+
+Jianyu Huang(UT EID:jh57266)
+email:jianyu@cs.utexas.edu
+
+Run the testcase:
+$make
+$./vsh.sh inputFile/sum
+
